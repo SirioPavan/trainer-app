@@ -22,7 +22,9 @@ function emit() { listeners.forEach(fn => fn()); }
 
 /* ================= Start ================= */
 export async function init() {
-  if (CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase) {
+  const forceDemo = new URLSearchParams(location.search).has("demo");
+  state.forced = forceDemo;
+  if (!forceDemo && CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase) {
     state.mode = "cloud";
     sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -100,6 +102,7 @@ function subscribeLive() {
 
 /* ================= Demo-Modus ================= */
 const LS = "fcs-trainer-demo-v1";
+const DEMO_PLAYERS = ["Luca M.","Noah K.","Elias B.","Mia S.","Leon F.","Lina W.","Matteo R.","Ben H.","Emma Z.","Nico T.","Sofia G.","Jonas P.","Alessio C.","Lara N."];
 function loadDemo() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS)); } catch (e) {}
@@ -107,7 +110,7 @@ function loadDemo() {
     d = {
       trainings: SEED.trainings.map(t => ({ ...t, id: uid(), template_id: t.template_id })),
       tournaments: SEED.tournaments.map(u => ({ ...u, id: uid() })),
-      players: [], attendance: {},
+      players: state.forced ? DEMO_PLAYERS.map((n, i) => ({ id: "dp" + i, name: n, year: 2016 + (i % 3 === 0 ? 1 : 0), active: true })) : [], attendance: {},
       people: [{ email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false }]
     };
   }

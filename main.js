@@ -103,7 +103,7 @@ function viewDashboard() {
   const vis = showAll ? items : items.slice(0, 12);
   const n = next && dparts(next.date);
   V.innerHTML = `
-   ${state.mode === "demo" ? `<p class="demo-note">Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand.</p>` : ""}
+   ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? "Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden." : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
    ${next ? `<button class="hero" data-open="${next.id}">
      <span class="k">Nächstes Training</span><span class="d">${n.full}</span>
      <span class="meta">${next.start}–${next.end} · ${PLACE[next.place]} · ${mins(next)} Min.<br>${esc(next.thema)}</span>
