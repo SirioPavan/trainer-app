@@ -2,7 +2,7 @@
 //  - "cloud": Supabase (gemeinsame Datenbank, Login per E-Mail-Link, Live-Abgleich)
 //  - "demo":  nur auf diesem Gerät (localStorage), wenn config.js noch leer ist
 import { SEED } from "./seed-data.js";
-import { CONFIG } from "../config.js";
+import { CONFIG } from "./config.js";
 
 const TEAM = CONFIG.teamId || "e-junioren";
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD lokal
