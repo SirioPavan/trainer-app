@@ -316,12 +316,12 @@ const mail = e => e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : "";
 function playerInfo(p) {
   const bd = p.birth_date ? p.birth_date.split("-").reverse().join(".") : "";
   const g = [[p.guardian1_name, p.guardian1_phone, p.guardian1_email], [p.guardian2_name, p.guardian2_phone, p.guardian2_email]]
-    .filter(x => x.some(Boolean)).filter((x, i, arr) => i === 0 || x.join() !== arr[0].join());
+    .filter(x => x[0]).filter((x, i, arr) => i === 0 || (x.join() !== arr[0].join() && x[0] !== arr[0][0]));
   const facts = [["Geboren", bd], ["Position", p.position], ["Starker Fuss", p.foot], ["Rückennummer", p.jersey ?? ""],
     ["Adresse", [p.street, [p.zip, p.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")]].filter(f => f[1] !== "" && f[1] != null);
   if (!facts.length && !g.length) return "";
   return `<div class="pinfo">${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-    ${g.map(([n, t, e]) => `<div class="guard"><b>${esc(n || "Erziehungsberechtigte/r")}</b>${t ? `<span>📞 ${tel(t)}</span>` : ""}${e ? `<span>✉ ${mail(e)}</span>` : ""}</div>`).join("")}</div>`;
+    ${g.map(([n, t, e]) => `<div class="guard"><b>${esc(n)}</b>${t ? `<span>📞 ${tel(t)}</span>` : ""}${e ? `<span>✉ ${mail(e)}</span>` : ""}</div>`).join("")}</div>`;
 }
 function importBox() {
   return `<details class="card pad addbox"><summary class="lbl">+ Clubcorner-Spielerliste importieren</summary>
