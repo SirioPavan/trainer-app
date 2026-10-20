@@ -115,8 +115,32 @@ function subscribeLive() {
 }
 
 /* ================= Demo-Modus ================= */
-const LS = "fcs-trainer-demo-v1";
+const LS = "fcs-trainer-demo-v2";   // neue Version = alte Demo-Daten werden verworfen
 const DEMO_PLAYERS = ["Luca M.","Noah K.","Elias B.","Mia S.","Leon F.","Lina W.","Matteo R.","Ben H.","Emma Z.","Nico T.","Sofia G.","Jonas P.","Alessio C.","Lara N."];
+/* Vorführ-Daten: erfundene Kinder, Eltern und vergangene Anwesenheiten */
+function demoPlayers() {
+  const pos = ["Tor", "Verteidigung", "Mittelfeld", "Sturm"], foot = ["rechts", "links"];
+  return DEMO_PLAYERS.map((n, i) => {
+    const last = { "M.": "Meier", "K.": "Keller", "B.": "Brunner", "S.": "Schmid", "F.": "Frei", "W.": "Weber", "R.": "Rossi", "H.": "Huber", "Z.": "Zürcher", "T.": "Tanner", "G.": "Graf", "P.": "Pfister", "C.": "Conti", "N.": "Näf" }[n.split(" ")[1]] || "Muster";
+    const first = n.split(" ")[0], y = 2016 + (i % 3 === 0 ? 0 : 1);
+    return { id: "dp" + i, name: first + " " + last, first_name: first, last_name: last, year: y, active: true,
+      birth_date: `${y}-${String(1 + i % 12).padStart(2, "0")}-${String(3 + i).padStart(2, "0")}`, nds_id: String(9000001 + i),
+      position: pos[i % 4], foot: foot[i % 5 === 0 ? 1 : 0], jersey: i + 1, street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
+      guardian1_name: "Elternteil " + last, guardian1_phone: "+41 79 000 00 " + String(10 + i), guardian1_email: "eltern." + last.toLowerCase() + "@beispiel.ch",
+      created_at: "2026-08-01T00:00:00" };
+  });
+}
+function addDemoHistory(d) {
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const kids = d.players.length ? d.players : demoPlayers();
+  for (let dt = new Date("2026-08-17T12:00:00Z"); dt <= new Date("2026-09-30T12:00:00Z"); dt.setUTCDate(dt.getUTCDate() + 1)) {
+    const wd = dt.getUTCDay(); if (wd !== 1 && wd !== 3) continue;
+    const iso = dt.toISOString().slice(0, 10), id = "hist-" + iso;
+    d.trainings.push({ id, date: iso, start_time: wd === 1 ? "17:00" : "18:30", end_time: wd === 1 ? "18:30" : "20:00", place: "grass",
+      thema: "Rasentraining", blocks: [], note: "Beispiel-Anwesenheit (Vorführung)" });
+    d.attendance[id] = {}; kids.forEach((p, i) => d.attendance[id][p.id] = rnd() < (i === 5 ? 0.5 : i % 4 === 0 ? 0.7 : 0.88));
+  }
+}
 function loadDemo() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(LS)); } catch (e) {}
@@ -124,10 +148,11 @@ function loadDemo() {
     d = {
       trainings: SEED.trainings.map(t => ({ ...t, id: uid(), template_id: t.template_id })),
       tournaments: SEED.tournaments.map(u => ({ ...u, id: uid() })),
-      players: state.forced ? DEMO_PLAYERS.map((n, i) => ({ id: "dp" + i, name: n, year: 2016 + (i % 3 === 0 ? 1 : 0), active: true })) : [], attendance: {},
+      players: state.forced ? demoPlayers() : [], attendance: {},
       people: [{ email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false }]
     };
   }
+  if (state.forced && !d.trainings.some(t => t.date < today())) addDemoHistory(d);
   state.exercises = SEED.exercises.map(normEx);
   state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time }));
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
