@@ -273,22 +273,54 @@ function viewExercise(id) {
 }
 
 /* ================= Kader ================= */
+let editP = null;
+const tel = n => n ? `<a href="tel:${esc(n.replace(/[^+\d]/g, ""))}">${esc(n)}</a>` : "";
+const mail = e => e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : "";
+function playerInfo(p) {
+  const bd = p.birth_date ? p.birth_date.split("-").reverse().join(".") : "";
+  const g = [[p.guardian1_name, p.guardian1_phone, p.guardian1_email], [p.guardian2_name, p.guardian2_phone, p.guardian2_email]]
+    .filter(x => x.some(Boolean)).filter((x, i, arr) => i === 0 || x.join() !== arr[0].join());
+  const facts = [["Geboren", bd], ["Position", p.position], ["Starker Fuss", p.foot], ["Rückennummer", p.jersey ?? ""],
+    ["Adresse", [p.street, [p.zip, p.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")]].filter(f => f[1] !== "" && f[1] != null);
+  if (!facts.length && !g.length) return "";
+  return `<div class="pinfo">${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
+    ${g.map(([n, t, e]) => `<div class="guard"><b>${esc(n || "Erziehungsberechtigte/r")}</b>${t ? `<span>📞 ${tel(t)}</span>` : ""}${e ? `<span>✉ ${mail(e)}</span>` : ""}</div>`).join("")}</div>`;
+}
+function importBox() {
+  return `<details class="card pad addbox"><summary class="lbl">+ Clubcorner-Spielerliste importieren</summary>
+    <div class="stack" style="margin-top:10px"><p class="small">CSV-Export der Spielerliste aus Clubcorner wählen. Bestehende Kinder (gleiche Passnummer) werden aktualisiert, neue hinzugefügt.</p>
+    <input type="file" id="ccfile" accept=".csv,text/csv" aria-label="Clubcorner-CSV"><p class="small" id="ccmsg" aria-live="polite"></p></div></details>`;
+}
+function ndsBox() {
+  const td = db.today(), from = td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01");
+  const r = db.ndsExport(from, td);
+  return `<section class="card pad stack"><div class="sec-head"><h3>NDS-Export</h3><span class="note">J+S-Anwesenheit</span></div>
+    <p class="small">Erstellt eine CSV-Datei im Format der J+S-Anwesenheitsliste (NDS-Personen-ID, Datum, Aktivität-Typ, Anwesend) für alle Trainings mit erfasster Anwesenheit.</p>
+    <form class="inline" id="ndsx"><input id="nfrom" type="date" value="${from}" aria-label="Von"><input id="nto" type="date" value="${td}" aria-label="Bis"><button class="btn">CSV herunterladen</button></form>
+    <p class="small muted">Aktuell: ${r.trainings} Trainings mit Anwesenheit seit ${from.split("-").reverse().join(".")}.${r.missing.length ? ` Ohne NDS-Nr. (nicht im Export): ${r.missing.map(esc).join(", ")}.` : ""}</p></section>`;
+}
 function viewKader() {
   const td = db.today();
   const past = state.trainings.filter(t => t.date <= td && Object.keys(state.attendance[t.id] || {}).length);
-  const ap = activePlayers(), inactive = state.players.filter(p => p.active === false);
+  const ap = activePlayers().slice().sort((a, b) => a.name.localeCompare(b.name, "de")), inactive = state.players.filter(p => p.active === false);
   V.innerHTML = `
    <div class="sec-head"><h2>Kader ${esc(state.team.name)}</h2><span class="note">${ap.length} Kinder</span></div>
    <div class="card list">${ap.map(p => {
      const da = past.filter(t => state.attendance[t.id][p.id]).length;
      return `<div class="row static" style="grid-template-columns:38px minmax(0,1fr) auto">
        <span class="avatar">${esc(p.name[0] || "?")}</span>
-       <span class="mid"><b>${esc(p.name)}</b><span>${p.year ? "Jahrgang " + p.year : ""}${past.length ? (p.year ? " · " : "") + da + "/" + past.length + " Trainings" : ""}</span></span>
-       <button class="linkbtn" data-off="${p.id}">Austragen</button></div>`; }).join("") || '<p class="empty">Noch keine Kinder eingetragen. Füge das erste unten hinzu.</p>'}</div>
+       <span class="mid"><b>${esc(p.name)}</b><span>${[p.year ? "Jg. " + p.year : "", past.length ? da + "/" + past.length + " Trainings" : "", p.nds_id ? "NDS " + esc(p.nds_id) : "ohne NDS-Nr."].filter(Boolean).join(" · ")}</span></span>
+       <button class="linkbtn" data-edit="${p.id}">Bearbeiten</button></div>
+       ${editP === p.id ? `${playerInfo(p)}<form class="inline editp" data-save="${p.id}">
+         <input name="name" value="${esc(p.name)}" required aria-label="Name"><input name="year" type="number" min="2010" max="2023" value="${p.year || ""}" aria-label="Jahrgang" placeholder="Jahrgang">
+         <input name="nds" value="${esc(p.nds_id || "")}" inputmode="numeric" placeholder="NDS-Personen-ID" aria-label="NDS-Personen-ID">
+         <button class="btn">Speichern</button><button type="button" class="btn ghost" data-off="${p.id}">Austragen</button></form>` : ""}`; }).join("") || '<p class="empty">Noch keine Kinder eingetragen. Füge das erste unten hinzu.</p>'}</div>
    <form class="inline card pad" id="addp"><input id="pn" placeholder="Vorname (Nachname-Initial)" required aria-label="Name" autocomplete="off">
-     <input id="py" type="number" min="2010" max="2023" placeholder="Jahrgang" aria-label="Jahrgang"><button class="btn">Kind hinzufügen</button></form>
+     <input id="py" type="number" min="2010" max="2023" placeholder="Jahrgang" aria-label="Jahrgang">
+     <input id="pnds" inputmode="numeric" placeholder="NDS-Nr. (Passnummer)" aria-label="NDS-Personen-ID"><button class="btn">Kind hinzufügen</button></form>
    <p class="small muted">Tipp zum Datenschutz: Vorname und Initial reichen, zum Beispiel «Luca M.».</p>
    ${inactive.length ? `<details class="card pad"><summary class="lbl">Ausgetragene Kinder (${inactive.length})</summary><div class="list">${inactive.map(p => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(p.name)}</b></span><button class="linkbtn" data-on="${p.id}">Wieder aufnehmen</button></div>`).join("")}</div></details>` : ""}
+   ${isAdmin() ? importBox() + ndsBox() : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span></span>
@@ -301,8 +333,31 @@ function viewKader() {
       <button class="btn">Einladen</button></form>
       <p class="small muted">So funktioniert es: Die Person öffnet die App, gibt genau diese E-Mail ein und tippt auf den Link im Mail. Sie hat dann Zugriff auf diese Mannschaft.</p>` : ""}
    ${state.mode === "cloud" ? `<button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
-  V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null), n + " hinzugefügt"); };
-  V.querySelectorAll("[data-off]").forEach(b => b.onclick = () => act(() => db.setPlayerActive(b.dataset.off, false), "Ausgetragen"));
+  V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
+  V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
+  V.querySelectorAll("[data-save]").forEach(f => f.onsubmit = e => { e.preventDefault(); const id = f.dataset.save; editP = null;
+    act(() => db.updatePlayer(id, { name: f.name.value.trim(), year: +f.year.value || null, nds_id: f.nds.value.trim() || null }), "Gespeichert"); });
+  const cc = V.querySelector("#ccfile");
+  if (cc) cc.onchange = async () => {
+    const f = cc.files[0]; if (!f) return; const msg = V.querySelector("#ccmsg");
+    try {
+      const list = db.parseClubcorner(await f.arrayBuffer());
+      msg.textContent = `${list.length} Kinder gefunden, importiere …`;
+      const r = await db.importPlayers(list);
+      toast(`${r.added} neu, ${r.updated} aktualisiert`); render(true);
+    } catch (e) { console.error(e); msg.textContent = e.message || String(e); }
+  };
+  const nx = V.querySelector("#ndsx");
+  if (nx) nx.onsubmit = e => {
+    e.preventDefault();
+    const r = db.ndsExport(V.querySelector("#nfrom").value, V.querySelector("#nto").value);
+    if (!r.rows) { toast("Keine erfassten Anwesenheiten im gewählten Zeitraum", true); return; }
+    const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `NDS_Anwesenheit_${V.querySelector("#nfrom").value}_${V.querySelector("#nto").value}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast(`${r.trainings} Trainings, ${r.rows} Zeilen exportiert`);
+  };
+  V.querySelectorAll("[data-off]").forEach(b => b.onclick = () => { editP = null; act(() => db.setPlayerActive(b.dataset.off, false), "Ausgetragen"); });
   V.querySelectorAll("[data-on]").forEach(b => b.onclick = () => act(() => db.setPlayerActive(b.dataset.on, true), "Wieder aufgenommen"));
   const inv = V.querySelector("#inv");
   if (inv) inv.onsubmit = e => { e.preventDefault(); act(() => db.inviteTrainer(V.querySelector("#ie").value, V.querySelector("#iname").value.trim(), V.querySelector("#irole").value), "Einladung gespeichert"); };

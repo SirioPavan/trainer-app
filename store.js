@@ -54,7 +54,7 @@ export async function signOut() { if (sb) await sb.auth.signOut(); state.user = 
 /* ================= Laden ================= */
 async function load() {
   if (!state.user) return;
-  const from = new Date(Date.now() - 60 * 864e5).toLocaleDateString("sv-SE");
+  const from = new Date(Date.now() - 300 * 864e5).toLocaleDateString("sv-SE");   // ganze Saison
   const [m, ex, tp, tr, tu, pl] = await Promise.all([
     sb.from("team_members").select("role,display_name,team_id,teams(name)").eq("user_id", state.user.id),
     sb.from("exercises").select("*"),
@@ -186,8 +186,9 @@ export async function deleteTraining(id) {
   await run(sb.from("trainings").delete().eq("id", id));
 }
 
-export async function addPlayer(name, year) {
+export async function addPlayer(name, year, nds_id) {
   const row = { team_id: TEAM, name, year: year || null, active: true };
+  if (nds_id) row.nds_id = String(nds_id).trim();
   if (state.mode === "demo") { state.players.push({ ...row, id: uid() }); return saveDemo(); }
   const { data, error } = await sb.from("players").insert(row).select().single(); if (error) throw error;
   state.players.push(data);
@@ -196,6 +197,80 @@ export async function setPlayerActive(id, active) {
   state.players.find(p => p.id === id).active = active;
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("players").update({ active }).eq("id", id));
+}
+
+export async function updatePlayer(id, patch) {
+  const p = state.players.find(x => x.id === id); Object.assign(p, patch);
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.from("players").update(patch).eq("id", id));
+}
+
+/* Clubcorner-Import: Spielerliste (CSV, Semikolon, Windows-1252) */
+const CC = { "Name": "last_name", "Vorname": "first_name", "Strasse": "street", "PLZ": "zip", "Ort": "city",
+  "E-Mail gesetzliche Vertretung": "guardian1_email", "E-Mail gesetzliche Vertretung 2": "guardian2_email",
+  "Tel. Mobil gesetzliche Vertretung": "guardian1_phone", "Name/Vorname gesetzliche Vertretung": "guardian1_name",
+  "Tel. Mobil gesetzliche Vertretung 2": "guardian2_phone", "Name/Vorname gesetzliche Vertretung 2": "guardian2_name",
+  "Geburtsdatum": "birth_date", "Passnummer": "nds_id", "Rückennummer": "jersey", "Spielposition": "position", "Starker Fuss": "foot" };
+function parseCsv(text, sep) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); if (row.some(x => x !== "")) rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); if (row.some(x => x !== "")) rows.push(row); }
+  return rows;
+}
+export function parseClubcorner(buf) {
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+  if (text.includes("\ufffd")) text = new TextDecoder("windows-1252").decode(buf);
+  const rows = parseCsv(text.replace(/^\ufeff/, ""), text.split("\n")[0].includes(";") ? ";" : ",");
+  const head = rows.shift().map(h => h.trim());
+  if (!head.includes("Passnummer") || !head.includes("Vorname")) throw new Error("Das sieht nicht nach einer Clubcorner-Spielerliste aus (Spalten «Vorname» und «Passnummer» fehlen).");
+  return rows.map(r => {
+    const o = {};
+    head.forEach((h, i) => { const k = CC[h]; const v = (r[i] || "").trim(); if (k && v && v !== "?") o[k] = v; });
+    if (o.birth_date) { const [d, m, y] = o.birth_date.split("."); o.birth_date = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`; o.year = +y; }
+    if (o.jersey !== undefined) o.jersey = /^\d+$/.test(o.jersey) ? +o.jersey : null;
+    o.name = ((o.first_name || "").split(" ")[0] + " " + (o.last_name || "")).trim();
+    return o;
+  }).filter(o => o.nds_id && o.name);
+}
+export async function importPlayers(list) {
+  let added = 0, updated = 0;
+  for (const o of list) {
+    const ex = state.players.find(p => p.nds_id === o.nds_id);
+    if (ex) { await updatePlayer(ex.id, { ...o, active: true }); updated++; }
+    else {
+      const row = { team_id: TEAM, active: true, ...o };
+      if (state.mode === "demo") state.players.push({ ...row, id: uid() });
+      else { const { data, error } = await sb.from("players").insert(row).select().single(); if (error) throw error; state.players.push(data); }
+      added++;
+    }
+  }
+  if (state.mode === "demo") saveDemo();
+  return { added, updated };
+}
+
+/* NDS-Export im Format der J+S-Anwesenheitsliste:
+   NDS-Personen-ID,Datum,Aktivität-Typ,Anwesend  (Ja/Nein) */
+export function ndsExport(from, to) {
+  const kids = state.players.filter(p => p.nds_id);
+  const trs = state.trainings.filter(t => t.date >= from && t.date <= to && Object.keys(state.attendance[t.id] || {}).length)
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  const lines = ["NDS-Personen-ID,Datum,Aktivität-Typ,Anwesend"];
+  for (const t of trs) {
+    const a = state.attendance[t.id] || {};
+    for (const p of kids.slice().sort((x, y) => x.nds_id.localeCompare(y.nds_id))) {
+      const joined = !p.created_at || p.created_at.slice(0, 10) <= t.date;   // erst ab Eintritt ins Kader
+      if (a[p.id] !== undefined || (p.active !== false && joined))
+        lines.push(`${p.nds_id},${t.date},J+S Training,${a[p.id] ? "Ja" : "Nein"}`);
+    }
+  }
+  return { csv: lines.join("\n") + "\n", trainings: trs.length, rows: lines.length - 1, missing: state.players.filter(p => p.active !== false && !p.nds_id).map(p => p.name) };
 }
 
 export async function addTournament(u) {
