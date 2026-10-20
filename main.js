@@ -184,6 +184,7 @@ function exCard(e, idx, t) {
         <select id="sw${idx}" data-swap="${idx}"><option value="">– andere Übung derselben Phase –</option>${others.map(o => `<option value="${o.id}">${esc(o.name)} (${PLACE[o.place]})</option>`).join("")}</select></div>` : ""}
     </div></article>`;
 }
+const attOpen = {};
 function viewTraining(id) {
   const isTpl = id.startsWith("tpl:");
   const t = isTpl ? state.templates.find(x => x.id === id.slice(4)) : state.trainings.find(x => x.id === id);
@@ -203,8 +204,8 @@ function viewTraining(id) {
    <section class="card pad stack">
      <div class="sec-head"><h3>Anwesenheit</h3><span class="pill ${c ? "ok" : "open"}">${c}/${n} da</span></div>
      <div class="attbar"><i style="width:${n ? c / n * 100 : 0}%"></i></div>
-     ${n ? `<details class="more" id="attd" ${c ? "" : "open"}><summary>${c ? "Liste anzeigen" : "Jetzt erfassen"}</summary>
-       <div class="att">${ap.map(p => `<button data-att="${p.id}" aria-pressed="${!!a[p.id]}"><span class="dot">${a[p.id] ? "✓" : ""}</span><span>${esc(p.name)}</span></button>`).join("")}</div>
+     ${n ? `<details class="more" id="attd" ${(attOpen[t.id] ?? !c) ? "open" : ""}><summary>${c ? "Liste" : "Jetzt erfassen"}</summary>
+       <div class="att">${ap.slice().sort((x, y) => x.name.localeCompare(y.name, "de")).map(p => `<button data-att="${p.id}" aria-pressed="${!!a[p.id]}"><span class="dot">${a[p.id] ? "✓" : ""}</span><span>${esc(p.name)}</span></button>`).join("")}</div>
        <div class="btnrow"><button class="btn ghost" data-all>Alle anwesend</button><button class="btn ghost" data-none>Zurücksetzen</button></div></details>`
       : `<p class="small muted">Noch keine Kinder im Kader. Trage sie unter «Kader» ein.</p>`}
    </section>
@@ -215,10 +216,10 @@ function viewTraining(id) {
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: isTpl ? "uebungen" : "trainings" });
   bindVideos();
   if (isTpl) return;
-  const keepOpen = () => { const dd = V.querySelector("#attd"); if (dd) dd.open = true; };
-  V.querySelectorAll("[data-att]").forEach(b => b.onclick = async () => { const p = b.dataset.att; await act(() => db.setAttendance(t.id, p, !a[p])); keepOpen(); });
-  const all = V.querySelector("[data-all]"); if (all) all.onclick = async () => { await act(() => db.setAllAttendance(t.id, true)); keepOpen(); };
-  const none = V.querySelector("[data-none]"); if (none) none.onclick = async () => { await act(() => db.setAllAttendance(t.id, false)); keepOpen(); };
+  const dd = V.querySelector("#attd"); if (dd) dd.ontoggle = () => { attOpen[t.id] = dd.open; };
+  V.querySelectorAll("[data-att]").forEach(b => b.onclick = () => { attOpen[t.id] = true; const p = b.dataset.att; act(() => db.setAttendance(t.id, p, !a[p])); });
+  const all = V.querySelector("[data-all]"); if (all) all.onclick = () => { attOpen[t.id] = true; act(() => db.setAllAttendance(t.id, true), "Alle anwesend"); };
+  const none = V.querySelector("[data-none]"); if (none) none.onclick = () => { attOpen[t.id] = true; act(() => db.setAllAttendance(t.id, false)); };
   V.querySelectorAll("[data-swap]").forEach(s => s.onchange = () => s.value && act(() => db.swapExercise(t.id, +s.dataset.swap, s.value), "Übung getauscht"));
   const note = V.querySelector("#note"); note.onchange = () => act(() => db.saveNote(t.id, note.value), "Notiz gespeichert");
   const del = V.querySelector("[data-deltr]");
@@ -273,7 +274,44 @@ function viewExercise(id) {
 }
 
 /* ================= Kader ================= */
-let editP = null;
+let editP = null, kaderMode = "kader", statRange = "season";
+function statData(range) {
+  const td = db.today();
+  const start = { season: td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01"), d30: new Date(Date.now() - 30 * 864e5).toLocaleDateString("sv-SE"), hall: "2026-10-21" }[range]
+    || (+td.slice(5, 7) >= 7 ? td.slice(0, 4) : String(+td.slice(0, 4) - 1)) + "-08-01";
+  const trs = state.trainings.filter(t => t.date <= td && t.date >= start && Object.keys(state.attendance[t.id] || {}).length).sort((a, b) => a.date.localeCompare(b.date));
+  const kids = state.players.filter(p => p.active !== false);
+  const elig = (p, t) => !p.created_at || p.created_at.slice(0, 10) <= t.date || (state.attendance[t.id] || {})[p.id] !== undefined;
+  const per = trs.map(t => { const a = state.attendance[t.id] || {}; const e = kids.filter(p => elig(p, t)); return { t, da: e.filter(p => a[p.id]).length, of: e.length }; });
+  const byKid = kids.map(p => { const mine = trs.filter(t => elig(p, t)); const da = mine.filter(t => (state.attendance[t.id] || {})[p.id]).length; return { p, da, of: mine.length, pct: mine.length ? da / mine.length : 0 }; })
+    .sort((a, b) => b.pct - a.pct || a.p.name.localeCompare(b.p.name, "de"));
+  const wd = {}; per.forEach(x => { const k = WD[new Date(x.t.date + "T12:00:00").getDay()]; (wd[k] ||= []).push(x.of ? x.da / x.of : 0); });
+  const tot = per.reduce((s, x) => s + x.da, 0), totOf = per.reduce((s, x) => s + x.of, 0);
+  return { start, trs, per, byKid, wd, avg: totOf ? tot / totOf : 0, avgKids: per.length ? tot / per.length : 0 };
+}
+function viewStats() {
+  const s = statData(statRange), pct = v => Math.round(v * 100) + "%";
+  const lvl = v => v >= .8 ? "ok" : v >= .6 ? "wait" : "bad";
+  const W = 340, H = 120, bw = s.per.length ? Math.max(4, Math.min(22, (W - 30) / s.per.length - 3)) : 10, maxN = Math.max(1, ...s.per.map(x => x.of));
+  const chart = s.per.length ? `<svg class="statchart" viewBox="0 0 ${W} ${H + 26}" role="img" aria-label="Anwesende Kinder pro Training">
+    ${[0, .5, 1].map(f => `<line x1="24" x2="${W}" y1="${H - f * H + 4}" y2="${H - f * H + 4}" class="grid"/><text x="20" y="${H - f * H + 8}" text-anchor="end" class="axis">${Math.round(f * maxN)}</text>`).join("")}
+    ${s.per.map((x, i) => { const h = x.da / maxN * H, xx = 28 + i * (bw + 3); return `<rect x="${xx}" y="${H - h + 4}" width="${bw}" height="${h}" rx="2" class="bar ${lvl(x.of ? x.da / x.of : 0)}"><title>${dparts(x.t.date).full}: ${x.da}/${x.of}</title></rect>${i % Math.ceil(s.per.length / 6) === 0 ? `<text x="${xx + bw / 2}" y="${H + 20}" text-anchor="middle" class="axis">${dparts(x.t.date).d}.${dparts(x.t.date).m}</text>` : ""}`; }).join("")}
+  </svg>` : `<p class="empty">Noch keine erfassten Trainings in diesem Zeitraum.</p>`;
+  return `<div class="chips" role="group" aria-label="Zeitraum">${[["season", "Ganze Saison"], ["hall", "Hallensaison"], ["d30", "Letzte 30 Tage"]].map(([k, l]) => `<button class="chip" data-sr="${k}" aria-pressed="${statRange === k}">${l}</button>`).join("")}</div>
+   <div class="tiles">
+     <div class="tile"><b>${s.trs.length}</b><span>Trainings erfasst</span></div>
+     <div class="tile"><b>${pct(s.avg)}</b><span>Ø Anwesenheit</span></div>
+     <div class="tile"><b>${s.avgKids.toFixed(1)}</b><span>Ø Kinder pro Training</span></div>
+   </div>
+   <section class="card pad stack"><h3>Kinder pro Training</h3>${chart}
+     <div class="legend"><span><i class="lg ok"></i>ab 80 %</span><span><i class="lg wait"></i>60–79 %</span><span><i class="lg bad"></i>unter 60 %</span></div>
+     ${Object.keys(s.wd).length ? `<p class="small muted">Nach Wochentag: ${Object.entries(s.wd).map(([k, v]) => `${k} ${pct(v.reduce((a, b) => a + b, 0) / v.length)}`).join(" · ")}</p>` : ""}</section>
+   <section class="card pad stack"><h3>Pro Kind</h3>
+     <div class="kidstats">${s.byKid.map(k => `<div class="ks"><span class="kn">${esc(k.p.name)}</span>
+       <span class="kbar"><i class="${lvl(k.pct)}" style="width:${k.of ? k.pct * 100 : 0}%"></i></span>
+       <span class="kv">${k.of ? `${k.da}/${k.of} · ${pct(k.pct)}` : "–"}</span></div>`).join("")}</div>
+     <p class="small muted">Gezählt werden nur Trainings mit erfasster Anwesenheit, und für jedes Kind erst ab seinem Eintritt ins Kader.</p></section>`;
+}
 const tel = n => n ? `<a href="tel:${esc(n.replace(/[^+\d]/g, ""))}">${esc(n)}</a>` : "";
 const mail = e => e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : "";
 function playerInfo(p) {
@@ -303,7 +341,14 @@ function viewKader() {
   const td = db.today();
   const past = state.trainings.filter(t => t.date <= td && Object.keys(state.attendance[t.id] || {}).length);
   const ap = activePlayers().slice().sort((a, b) => a.name.localeCompare(b.name, "de")), inactive = state.players.filter(p => p.active === false);
-  V.innerHTML = `
+  const seg = `<div class="seg" role="tablist" aria-label="Ansicht">${[["kader", "Kader & Team"], ["stats", "Statistik"]].map(([k, l]) => `<button role="tab" data-km="${k}" aria-selected="${kaderMode === k}">${l}</button>`).join("")}</div>`;
+  if (kaderMode === "stats") {
+    V.innerHTML = seg + viewStats();
+    V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
+    V.querySelectorAll("[data-sr]").forEach(b => b.onclick = () => { statRange = b.dataset.sr; render(true); });
+    return;
+  }
+  V.innerHTML = seg + `
    <div class="sec-head"><h2>Kader ${esc(state.team.name)}</h2><span class="note">${ap.length} Kinder</span></div>
    <div class="card list">${ap.map(p => {
      const da = past.filter(t => state.attendance[t.id][p.id]).length;
@@ -333,6 +378,7 @@ function viewKader() {
       <button class="btn">Einladen</button></form>
       <p class="small muted">So funktioniert es: Die Person öffnet die App, gibt genau diese E-Mail ein und tippt auf den Link im Mail. Sie hat dann Zugriff auf diese Mannschaft.</p>` : ""}
    ${state.mode === "cloud" ? `<button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
+  V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
   V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
   V.querySelectorAll("[data-save]").forEach(f => f.onsubmit = e => { e.preventDefault(); const id = f.dataset.save; editP = null;
