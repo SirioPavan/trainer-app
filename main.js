@@ -55,7 +55,7 @@ function render(keepScroll) {
   nav.hidden = false; top.classList.remove("bare");
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen" };
-  document.getElementById("title").textContent = route.training ? "Training" : route.exercise ? "Übung" : T[route.tab];
+  document.getElementById("title").textContent = route.training ? (route.training.startsWith("tpl:") ? "Vorlage" : "Training") : route.exercise ? "Übung" : T[route.tab];
   if (route.training) viewTraining(route.training);
   else if (route.exercise) viewExercise(route.exercise);
   else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen })[route.tab]();
@@ -120,12 +120,8 @@ function viewDashboard() {
      <form class="inline" id="addt" style="margin-top:10px">
        <input id="tdate" type="date" required aria-label="Datum" min="${td}">
        <select id="ttpl" aria-label="Vorlage">${state.templates.map(t => `<option value="${t.id}">${esc(t.title)} (${t.start}–${t.end})</option>`).join("")}</select>
-       <button class="btn">Anlegen</button></form></details>
-   <div class="sec-head"><h2>Vorlagen</h2><span class="note">aus dem J+S-Manual</span></div>
-   <div class="card list">${state.templates.map(tp => `<button class="row" data-tpl="${tp.id}" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="mid"><b>${esc(tp.title)}</b><span>${esc(tp.thema)} · ${mins(tp)}'</span></span><span class="chev">›</span></button>`).join("")}</div>`;
+       <button class="btn">Anlegen</button></form></details>`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
-  V.querySelectorAll("[data-tpl]").forEach(b => b.onclick = () => go({ tab: "trainings", training: "tpl:" + b.dataset.tpl }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   const mb = V.querySelector("[data-more]"); if (mb) mb.onclick = () => { showAll = !showAll; render(true); };
@@ -195,7 +191,7 @@ function viewTraining(id) {
   const d = isTpl ? { full: "Vorlage" } : dparts(t.date), total = mins(t), a = state.attendance[t.id] || {}, ap = activePlayers(), c = attCount(t), n = ap.length;
   const used = [...new Set(t.blocks.map(b => b.ph))];
   V.innerHTML = `
-   <button class="back" data-back>‹ Planung</button>
+   <button class="back" data-back>‹ ${isTpl ? "Trainingsvorlagen" : "Planung"}</button>
    <section class="dhead">
      <h2>${isTpl ? esc(t.title) : d.full}</h2>
      <div><span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> <span class="muted small">${t.start}–${t.end} · ${total} Min.</span></div>
@@ -216,7 +212,7 @@ function viewTraining(id) {
      <textarea id="note" rows="2" placeholder="z. B. Halle B statt A, Bälle mitnehmen">${esc(t.note || "")}</textarea></section>`}
    ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t)}</section>`).join("")}
    ${isTpl ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
-  V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "trainings" });
+  V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: isTpl ? "uebungen" : "trainings" });
   bindVideos();
   if (isTpl) return;
   const keepOpen = () => { const dd = V.querySelector("#attd"); if (dd) dd.open = true; };
@@ -233,11 +229,25 @@ function viewTraining(id) {
 }
 
 /* ================= Übungen ================= */
-let q = "", fph = "all", fpl = "all";
+let q = "", fph = "all", fpl = "all", libMode = "ex";
+function viewTemplates() {
+  const groups = [["Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
+  return groups.filter(g => g[1].length).map(([g, list]) => `<div class="sec-head"><h3>${esc(g)}</h3><span class="note">${list.length}</span></div>
+    <div class="card list">${list.map(tp => `<button class="row" data-tpl="${tp.id}" style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="mid"><b>${esc(tp.title)}</b><span>${esc(tp.thema)} · ${mins(tp)}' · ${tp.blocks.length} Übungen</span></span><span class="chev">›</span></button>`).join("")}</div>`).join("")
+    + `<p class="small muted">Eine Vorlage ist ein komplettes Training. Unter «Planung → + Training hinzufügen» legst du mit einer Vorlage ein Training an einem bestimmten Tag an.</p>`;
+}
 function viewLibrary() {
+  const modeBar = `<div class="seg" role="tablist" aria-label="Ansicht">${[["ex", "Übungen"], ["tpl", "Trainingsvorlagen"]].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${libMode === k}">${l}</button>`).join("")}</div>`;
+  if (libMode === "tpl") {
+    V.innerHTML = modeBar + viewTemplates();
+    V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
+    V.querySelectorAll("[data-tpl]").forEach(b => b.onclick = () => go({ tab: "uebungen", training: "tpl:" + b.dataset.tpl }));
+    return;
+  }
   const items = state.exercises.filter(e => (fph === "all" || e.ph === fph) && (fpl === "all" || (fpl === "sfv" ? /^SFV/.test(e.src || "") : e.place === fpl && !/^SFV/.test(e.src || ""))) && (!q || (e.name + " " + (e.org || "") + " " + (e.ablauf || e.offen || "")).toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => Object.keys(PH).indexOf(a.ph) - Object.keys(PH).indexOf(b.ph));
-  V.innerHTML = `
+  V.innerHTML = modeBar + `
    <div class="sec-head"><h2>Übungen</h2><span class="note">${state.exercises.length} Lernbausteine</span></div>
    <input class="search" id="q" type="search" placeholder="Übung suchen, z. B. Tigerball" value="${esc(q)}" aria-label="Übung suchen">
    <div class="chips" role="group" aria-label="Phase">${[["all", "Alle Phasen"], ["auf", "Auffangen"], ["ein", "Einleitung"], ["sp", "Spielen"], ["le", "Lernen"], ["vi", "Vielseitigkeit"], ["aus", "Ausklang"]].map(([k, l]) => `<button class="chip" data-ph="${k}" aria-pressed="${fph === k}">${l}</button>`).join("")}</div>
@@ -249,6 +259,7 @@ function viewLibrary() {
   V.querySelectorAll("[data-ph]").forEach(b => b.onclick = () => { fph = b.dataset.ph; render(true); });
   V.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { fpl = b.dataset.pl; render(true); });
   V.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => go({ tab: "uebungen", exercise: b.dataset.ex }));
+  V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
 }
 function viewExercise(id) {
   const e = ex(id); const td = db.today();
