@@ -214,3 +214,21 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .dt span{font-size:12px;color:var(--muted)}
 #upl input[type=file]{border:1.5px dashed var(--line);border-radius:10px;padding:12px;background:var(--surface);width:100%}
 #upl input[list]{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);width:100%}
+
+.videos{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:8px}
+.vlink{display:inline-flex;align-items:center;gap:8px;color:var(--red-ink);font-weight:700;text-decoration:none;font-size:14px}
+.vlink:hover{text-decoration:underline}
+.vlink.own{color:var(--ink)}
+.play{flex:none;width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;padding-left:2px}
+.vrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.addvid summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600}
+.srcline{font-size:12px;color:var(--muted)}
+.rules summary{cursor:pointer;list-style:none}
+.rules summary::-webkit-details-marker{display:none}
+.rules summary h3::after{content:" ›";color:var(--muted)}
+.rules[open] summary h3::after{content:" ⌄"}
+.rgrid{display:grid;grid-template-columns:1fr;gap:10px;margin:10px 0}
+.rbox{background:var(--soft);border-radius:8px;padding:10px 12px;font-size:14px}
+.rbox b{font-family:var(--display);text-transform:uppercase;font-size:16px}
+.rbox ul{margin:4px 0 0;padding-left:18px}
+@media (min-width:640px){.rgrid{grid-template-columns:1fr 1fr}}

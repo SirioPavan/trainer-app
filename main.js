@@ -147,18 +147,43 @@ function rowU(u) {
 }
 
 /* ================= Training ================= */
+function videoBlock(e) {
+  const own = state.links.filter(l => l.exercise_id === e.id);
+  const vids = (e.videos || []);
+  return `<div class="videos" data-vfor="${e.id}">
+    ${vids.length || own.length ? `<span class="lbl">Videos:</span>` : ""}
+    ${vids.map(v => `<a class="vlink" href="${esc(v.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(v.title)}</a>`).join("")}
+    ${own.map(l => `<span class="vrow"><a class="vlink own" href="${esc(l.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(l.title)}</a><button class="linkbtn" data-dellink="${l.id}">Entfernen</button></span>`).join("")}
+    <details class="addvid"><summary>+ Video-Link hinzufügen</summary>
+      <form class="inline" data-addlink="${e.id}" style="margin-top:8px">
+        <input name="title" placeholder="Titel, z. B. Finte vorgezeigt" required aria-label="Titel">
+        <input name="url" type="url" placeholder="https://youtube.com/…" required aria-label="Link">
+        <button class="btn">Speichern</button></form></details></div>`;
+}
+function bindVideos() {
+  V.querySelectorAll("[data-addlink]").forEach(f => f.onsubmit = e => {
+    e.preventDefault();
+    act(() => db.addLink(f.dataset.addlink, f.title.value.trim(), f.url.value.trim()), "Video-Link gespeichert");
+  });
+  V.querySelectorAll("[data-dellink]").forEach(b => b.onclick = () => {
+    if (b.dataset.armed) act(() => db.deleteLink(b.dataset.dellink), "Entfernt");
+    else { b.dataset.armed = 1; b.textContent = "Sicher?"; }
+  });
+}
 function exCard(e, idx, t) {
   if (!e) return `<p class="card pad empty">Übung nicht gefunden.</p>`;
   const others = t ? state.exercises.filter(x => x.ph === e.ph && x.id !== e.id) : [];
   return `<article class="card ex">${e.d ? drawDiagram(e.d) : ""}
     <div class="body">
-      <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">S. ${esc(e.page)}</span>` : ""}</div>
+      <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</div>
       ${e.org ? `<p><span class="lbl">Organisation:</span> ${esc(e.org)}</p>` : ""}
       ${e.ablauf ? `<p><span class="lbl">Ablauf:</span> ${esc(e.ablauf)}</p>` : ""}
       ${e.offen ? `<div class="fahr"><div><b>Offen starten</b>${esc(e.offen)}</div><div><b>Üben</b>${esc(e.ueben)}</div><div><b>Wetteifern</b>${esc(e.wett)}</div></div>` : ""}
       ${e.own ? `<p class="own">${esc(e.own)}</p>` : ""}
       ${e.coach?.length ? `<div><span class="lbl">Coaching:</span><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
       ${e.var ? `<p class="var"><span class="lbl">Rad der Variation:</span> ${esc(e.var)}</p>` : ""}
+      ${videoBlock(e)}
+      ${e.src ? `<p class="srcline">Quelle: ${esc(e.src)}</p>` : ""}
       ${t && others.length ? `<div class="swap"><label for="sw${idx}" class="muted">Übung tauschen:</label>
         <select id="sw${idx}" data-swap="${idx}"><option value="">– andere Übung derselben Phase –</option>${others.map(o => `<option value="${o.id}">${esc(o.name)} (${PLACE[o.place]})</option>`).join("")}</select></div>` : ""}
     </div></article>`;
@@ -192,6 +217,7 @@ function viewTraining(id) {
    ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t)}</section>`).join("")}
    ${isTpl ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "trainings" });
+  bindVideos();
   if (isTpl) return;
   const keepOpen = () => { const dd = V.querySelector("#attd"); if (dd) dd.open = true; };
   V.querySelectorAll("[data-att]").forEach(b => b.onclick = async () => { const p = b.dataset.att; await act(() => db.setAttendance(t.id, p, !a[p])); keepOpen(); });
@@ -209,16 +235,16 @@ function viewTraining(id) {
 /* ================= Übungen ================= */
 let q = "", fph = "all", fpl = "all";
 function viewLibrary() {
-  const items = state.exercises.filter(e => (fph === "all" || e.ph === fph) && (fpl === "all" || e.place === fpl) && (!q || (e.name + " " + (e.org || "") + " " + (e.ablauf || e.offen || "")).toLowerCase().includes(q.toLowerCase())))
+  const items = state.exercises.filter(e => (fph === "all" || e.ph === fph) && (fpl === "all" || (fpl === "sfv" ? /^SFV/.test(e.src || "") : e.place === fpl && !/^SFV/.test(e.src || ""))) && (!q || (e.name + " " + (e.org || "") + " " + (e.ablauf || e.offen || "")).toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => Object.keys(PH).indexOf(a.ph) - Object.keys(PH).indexOf(b.ph));
   V.innerHTML = `
    <div class="sec-head"><h2>Übungen</h2><span class="note">${state.exercises.length} Lernbausteine</span></div>
    <input class="search" id="q" type="search" placeholder="Übung suchen, z. B. Tigerball" value="${esc(q)}" aria-label="Übung suchen">
    <div class="chips" role="group" aria-label="Phase">${[["all", "Alle Phasen"], ["auf", "Auffangen"], ["ein", "Einleitung"], ["sp", "Spielen"], ["le", "Lernen"], ["vi", "Vielseitigkeit"], ["aus", "Ausklang"]].map(([k, l]) => `<button class="chip" data-ph="${k}" aria-pressed="${fph === k}">${l}</button>`).join("")}</div>
-   <div class="chips" role="group" aria-label="Ort">${[["all", "Rasen & Halle"], ["grass", "Rasen"], ["hall", "Halle"]].map(([k, l]) => `<button class="chip" data-pl="${k}" aria-pressed="${fpl === k}">${l}</button>`).join("")}</div>
+   <div class="chips" role="group" aria-label="Ort">${[["all", "Alle Quellen"], ["grass", "Manual Rasen"], ["hall", "Manual Halle"], ["sfv", "SFV-Karten"]].map(([k, l]) => `<button class="chip" data-pl="${k}" aria-pressed="${fpl === k}">${l}</button>`).join("")}</div>
    <div class="card list">${items.map(e => `<button class="row" data-ex="${e.id}" style="grid-template-columns:8px minmax(0,1fr) auto">
       <span class="phbar" style="background:var(${PH[e.ph].c})"></span>
-      <span class="mid"><b>${esc(e.name)}</b><span>${PH[e.ph].t.replace("Hauptteil · ", "")} · ${PLACE[e.place]}${e.page ? " · S. " + esc(e.page) : ""}</span></span><span class="chev">›</span></button>`).join("") || '<p class="empty">Keine Übung passt zum Filter.</p>'}</div>`;
+      <span class="mid"><b>${esc(e.name)}</b><span>${PH[e.ph].t.replace("Hauptteil · ", "")} · ${/^SFV/.test(e.src || "") ? "SFV-Karte" : PLACE[e.place]}${e.page ? " · " + (/^\d/.test(e.page) ? "S. " : "") + esc(e.page) : ""}${(e.videos || []).length || state.links.some(l => l.exercise_id === e.id) ? " · ▶ Video" : ""}</span></span><span class="chev">›</span></button>`).join("") || '<p class="empty">Keine Übung passt zum Filter.</p>'}</div>`;
   const qi = V.querySelector("#q"); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; render(); const n2 = V.querySelector("#q"); n2.focus(); n2.setSelectionRange(p, p); };
   V.querySelectorAll("[data-ph]").forEach(b => b.onclick = () => { fph = b.dataset.ph; render(true); });
   V.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { fpl = b.dataset.pl; render(true); });
@@ -232,6 +258,7 @@ function viewExercise(id) {
    ${exCard(e)}
    <p class="small muted">${usedIn.length ? "Eingeplant: " + usedIn.slice(0, 6).map(t => dparts(t.date).wd + " " + dparts(t.date).d + ". " + dparts(t.date).m).join(", ") + (usedIn.length > 6 ? " …" : "") : "In keinem kommenden Training eingeplant."}</p>`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "uebungen" });
+  bindVideos();
 }
 
 /* ================= Kader ================= */
@@ -347,12 +374,39 @@ function bindDocs() {
     toast(ok + " von " + files.length + " hochgeladen"); render(true);
   };
 }
+function rulesSection() {
+  return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. E <span class="muted small">BRACK.CH play more football</span></h3></summary>
+    <div class="rgrid">
+      <div class="rbox"><b>Kleinfeld 3 vs. 3</b><ul>
+        <li>Feld 25–30 × 20–25 m, Mini-Tore</li><li>Spieldauer 8–10 Min.</li>
+        <li>Anspiel, Abstoss, Eckball und Einwurf flach mit dem Fuss, als Pass oder Dribbling</li>
+        <li>Ball im Aus: sofort mit Ersatzball weiter. Wer zuletzt berührt hat, holt den Ball (Team kurz in Unterzahl)</li>
+        <li>Kein Penalty, Freistösse indirekt, Gegner 5 Kinderschritte weg</li>
+        <li>Wechsel idealerweise nach jedem Tor</li></ul></div>
+      <div class="rbox"><b>Grossfeld 6 vs. 6</b><ul>
+        <li>Feld 43–48 × 25–30 m, 5-m-Tore, Strafraum 10 m</li><li>Spieldauer 15 Min., mit Torspieler/in</li>
+        <li>Mind. 2 verschiedene Torspieler/innen pro Turnier, Rückpass nicht in die Hände</li>
+        <li>Abstoss als Abwurf aus den Händen. Legt die Torspielerin den Ball auf den Boden: führen und passen</li>
+        <li>Penalty 2 Kinderschritte vor der Strafraumlinie, Freistösse indirekt</li>
+        <li>Jedes Kind in den ersten 2 Runden insgesamt mind. 15 Min. im 6 vs. 6</li></ul></div>
+      <div class="rbox"><b>Turnier</b><ul>
+        <li>4 Teams, 6 Spielrunden nach Rotation, ca. 120 Min.</li>
+        <li>Pause 3 Min. zwischen den Runden, 5–10 Min. nach 3 Runden</li>
+        <li>Teamgrösse optimal 8–9 Kinder, Ball Grösse 4</li></ul></div>
+      <div class="rbox"><b>Für alle</b><ul>
+        <li>Kein Abseits, keine Strafen, keine Ranglisten</li>
+        <li>Kinder regeln das Spiel selbst. Strittig: Schere-Stein-Papier</li>
+        <li>Schienbeinschoner Pflicht, keine Stollenschuhe</li>
+        <li>Shakehands nach jedem Spiel, Trainer in der Coachingzone, Eltern in der Zuschauerzone</li></ul></div>
+    </div><p class="small muted">Zusammenfassung der Ausführungsbestimmungen Kat. E / FF12. Massgebend ist das Original-Dokument.</p></details>`;
+}
 function viewWissen() {
   const bar = p => `<div class="bar">${p.map(([c, f, m, l]) => `<div style="flex:${f};background:${c}"><b>${m}</b>${l}</div>`).join("")}</div>`;
   const R = "var(--red)", K = "#141414", G = "#7a7a7a", L = "#5a5a5a";
   V.innerHTML = `
    <div class="sec-head"><h2>Wissen</h2><span class="note">Kurs & Dokumente</span></div>
    ${docsSection()}
+   ${rulesSection()}
    <section class="card pad stack"><h3>Trainingsaufbau <span class="muted small">S. 37</span></h3>
      <div class="steps">
       <div class="step"><b>Auffangen</b><p>Wer ankommt, spielt sofort: kleine Spiele (z. B. 3:3) auf vorbereiteten Kleinfeldern.</p></div>

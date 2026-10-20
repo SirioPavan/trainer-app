@@ -12,7 +12,7 @@ const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
   mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren" },
-  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, people: [], documents: [], docUrls: {}
+  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, people: [], documents: [], docUrls: {}, links: []
 };
 
 let sb = null;
@@ -63,6 +63,8 @@ async function load() {
     sb.from("tournaments").select("*").eq("team_id", TEAM).order("date"),
     sb.from("players").select("*").eq("team_id", TEAM).order("name")
   ]);
+  const lk = await sb.from("exercise_links").select("*").eq("team_id", TEAM).order("created_at");
+  state.links = lk.error ? [] : (lk.data || []);   // Tabelle erst ab 05_videos_sfv_karten.sql
   const mine = (m.data || []).find(x => x.team_id === TEAM);
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
@@ -130,13 +132,13 @@ function loadDemo() {
   state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time }));
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
-  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.role = "admin";
+  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.role = "admin"; state.links = d.links || [];
 }
 function saveDemo() {
   try {
     localStorage.setItem(LS, JSON.stringify({
       trainings: state.trainings, players: state.players, attendance: state.attendance,
-      people: state.people,
+      people: state.people, links: state.links,
       tournaments: state.tournaments.map(u => ({ ...u, time_text: u.time, organizer: u.org, category: u.cat }))
     }));
   } catch (e) {}
@@ -230,6 +232,20 @@ export async function removeMember(person) {
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("invites").delete().eq("team_id", TEAM).eq("email", person.email));
   if (person.user_id) await run(sb.from("team_members").delete().eq("team_id", TEAM).eq("user_id", person.user_id));
+}
+
+/* ================= Video-Links ================= */
+export async function addLink(exerciseId, title, url) {
+  if (!/^https?:\/\//i.test(url)) throw new Error("Der Link muss mit https:// beginnen");
+  const row = { team_id: TEAM, exercise_id: exerciseId, title, url };
+  if (state.mode === "demo") { state.links.push({ ...row, id: uid() }); return saveDemo(); }
+  const { data, error } = await sb.from("exercise_links").insert(row).select().single(); if (error) throw error;
+  state.links.push(data);
+}
+export async function deleteLink(id) {
+  state.links = state.links.filter(l => l.id !== id);
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.from("exercise_links").delete().eq("id", id));
 }
 
 /* ================= Dokumente ================= */
