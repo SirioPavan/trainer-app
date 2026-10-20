@@ -166,10 +166,10 @@ function bindVideos() {
     else { b.dataset.armed = 1; b.textContent = "Sicher?"; }
   });
 }
-function exCard(e, idx, t) {
+function exCard(e, idx, t, surface) {
   if (!e) return `<p class="card pad empty">Übung nicht gefunden.</p>`;
   const others = t ? state.exercises.filter(x => x.ph === e.ph && x.id !== e.id) : [];
-  return `<article class="card ex">${e.d ? drawDiagram(e.d) : ""}
+  return `<article class="card ex">${e.d ? drawDiagram(surface ? { ...e.d, s: surface } : e.d) : ""}
     <div class="body">
       <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</div>
       ${e.org ? `<p><span class="lbl">Organisation:</span> ${esc(e.org)}</p>` : ""}
@@ -211,7 +211,7 @@ function viewTraining(id) {
    </section>
    <section class="card pad stack"><label for="note" class="lbl">Notiz zum Training</label>
      <textarea id="note" rows="2" placeholder="z. B. Halle B statt A, Bälle mitnehmen">${esc(t.note || "")}</textarea></section>`}
-   ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t)}</section>`).join("")}
+   ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t, t.place === "hall" ? "hall" : "grass")}</section>`).join("")}
    ${isTpl ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: isTpl ? "uebungen" : "trainings" });
   bindVideos();
