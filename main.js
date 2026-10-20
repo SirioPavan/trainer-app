@@ -179,7 +179,6 @@ function exCard(e, idx, t, surface) {
       ${e.coach?.length ? `<div><span class="lbl">Coaching:</span><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
       ${e.var ? `<p class="var"><span class="lbl">Rad der Variation:</span> ${esc(e.var)}</p>` : ""}
       ${videoBlock(e)}
-      ${e.src ? `<p class="srcline">Quelle: ${esc(e.src)}</p>` : ""}
       ${t && others.length ? `<div class="swap"><label for="sw${idx}" class="muted">Übung tauschen:</label>
         <select id="sw${idx}" data-swap="${idx}"><option value="">– andere Übung derselben Phase –</option>${others.map(o => `<option value="${o.id}">${esc(o.name)} (${PLACE[o.place]})</option>`).join("")}</select></div>` : ""}
     </div></article>`;
