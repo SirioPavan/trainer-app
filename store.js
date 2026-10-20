@@ -12,7 +12,7 @@ const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
   mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren" },
-  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, people: []
+  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, people: [], documents: [], docUrls: {}
 };
 
 let sb = null;
@@ -81,6 +81,18 @@ async function load() {
   if (state.role) {
     const { data } = await sb.rpc("team_people", { t: TEAM });
     state.people = data || [];
+    await loadDocs();
+  }
+}
+async function loadDocs() {
+  const { data, error } = await sb.from("documents").select("*").eq("team_id", TEAM).order("category").order("title");
+  if (error) { state.documents = []; return; }   // Tabelle noch nicht angelegt (04_dokumente.sql)
+  state.documents = data || [];
+  const paths = state.documents.map(d => d.file_path);
+  state.docUrls = {};
+  if (paths.length) {
+    const { data: urls } = await sb.storage.from("dokumente").createSignedUrls(paths, 12 * 3600);
+    (urls || []).forEach(u => { if (u.signedUrl) state.docUrls[u.path] = u.signedUrl; });
   }
 }
 const normT = t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5), tpl: t.template_id });
@@ -218,6 +230,22 @@ export async function removeMember(person) {
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("invites").delete().eq("team_id", TEAM).eq("email", person.email));
   if (person.user_id) await run(sb.from("team_members").delete().eq("team_id", TEAM).eq("user_id", person.user_id));
+}
+
+/* ================= Dokumente ================= */
+export async function uploadDocument(file, title, category) {
+  if (state.mode === "demo") throw new Error("Dokumente gibt es nur in der echten App mit Login");
+  const safe = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+  const path = TEAM + "/" + uid().slice(0, 8) + "-" + safe;
+  const up = await sb.storage.from("dokumente").upload(path, file, { contentType: "application/pdf", upsert: false });
+  if (up.error) throw up.error;
+  await run(sb.from("documents").insert({ team_id: TEAM, title, category, file_path: path, file_name: file.name, size_bytes: file.size }));
+  await loadDocs();
+}
+export async function deleteDocument(doc) {
+  await run(sb.storage.from("dokumente").remove([doc.file_path]));
+  await run(sb.from("documents").delete().eq("id", doc.id));
+  await loadDocs();
 }
 
 export { today };

@@ -301,11 +301,58 @@ function viewTurniere() {
 }
 
 /* ================= Wissen ================= */
+let dq = "";
+function docsSection() {
+  if (state.mode === "demo") return `<section class="card pad stack"><h3>Dokumente</h3><p class="small muted">Die Dokumenten-Ablage mit den Kurs-PDFs gibt es nur in der echten App mit Login.</p></section>`;
+  const docs = state.documents.filter(d => !dq || (d.title + " " + d.category).toLowerCase().includes(dq.toLowerCase()));
+  const cats = [...new Set(state.documents.map(d => d.category))];
+  const groups = [...new Set(docs.map(d => d.category))];
+  const mb = b => b ? (b / 1048576 >= 1 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB") : "";
+  return `<section class="card pad stack" id="docs">
+    <div class="sec-head"><h3>Dokumente</h3><span class="note">${state.documents.length} PDFs</span></div>
+    ${state.documents.length > 5 ? `<input class="search" id="dq" type="search" placeholder="Dokument suchen" value="${esc(dq)}" aria-label="Dokument suchen">` : ""}
+    ${groups.map(g => `<div class="docgroup"><div class="doccat">${esc(g)}</div>
+      ${docs.filter(d => d.category === g).map(d => `<div class="docrow">
+        <a class="doclink" href="${esc(state.docUrls[d.file_path] || "#")}" target="_blank" rel="noopener">
+          <span class="pdf" aria-hidden="true">PDF</span><span class="dt"><b>${esc(d.title)}</b><span>${mb(d.size_bytes)}</span></span></a>
+        ${isAdmin() ? `<button class="linkbtn" data-deldoc="${d.id}">Löschen</button>` : ""}</div>`).join("")}</div>`).join("")
+      || `<p class="small muted">${state.documents.length ? "Kein Dokument passt zur Suche." : "Noch keine Dokumente. " + (isAdmin() ? "Lade das erste unten hoch." : "Der Admin kann hier PDFs ablegen.")}</p>`}
+    ${isAdmin() ? `<details class="addbox" ${state.documents.length ? "" : "open"}><summary class="lbl">+ PDFs hochladen</summary>
+      <form id="upl" class="stack" style="margin-top:10px">
+        <input id="ufile" type="file" accept="application/pdf" multiple required aria-label="PDF-Dateien">
+        <input id="ucat" list="ucats" placeholder="Kategorie, z. B. J+S-Manuals" value="${esc(cats[0] || "J+S-Manuals")}" aria-label="Kategorie" required>
+        <datalist id="ucats">${[...new Set([...cats, "J+S-Manuals", "Übungssammlungen", "Verein & Organisation", "Turniere & Spielbetrieb"])].map(c => `<option value="${esc(c)}">`).join("")}</datalist>
+        <p class="small muted">Mehrere Dateien auf einmal möglich. Der Titel wird aus dem Dateinamen gebildet, max. 50 MB pro Datei.</p>
+        <button class="btn">Hochladen</button><p class="small" id="uplmsg" aria-live="polite"></p></form></details>` : ""}
+  </section>`;
+}
+function bindDocs() {
+  const dqi = V.querySelector("#dq");
+  if (dqi) dqi.oninput = () => { dq = dqi.value; const p = dqi.selectionStart; render(true); const n = V.querySelector("#dq"); n.focus(); n.setSelectionRange(p, p); };
+  V.querySelectorAll("[data-deldoc]").forEach(b => b.onclick = () => {
+    if (b.dataset.armed) act(() => db.deleteDocument(state.documents.find(d => d.id === b.dataset.deldoc)), "Dokument gelöscht");
+    else { b.dataset.armed = 1; b.textContent = "Sicher? Nochmals tippen"; }
+  });
+  const f = V.querySelector("#upl");
+  if (f) f.onsubmit = async e => {
+    e.preventDefault();
+    const files = [...V.querySelector("#ufile").files], cat = V.querySelector("#ucat").value.trim() || "Allgemein", msg = V.querySelector("#uplmsg"), btn = f.querySelector(".btn");
+    btn.disabled = true; let ok = 0;
+    for (const [i, file] of files.entries()) {
+      msg.textContent = `Lade ${i + 1} von ${files.length}: ${file.name} …`;
+      const title = file.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+      try { await db.uploadDocument(file, title, cat); ok++; }
+      catch (err) { console.error(err); toast(file.name + ": " + (err.message || err), true); }
+    }
+    toast(ok + " von " + files.length + " hochgeladen"); render(true);
+  };
+}
 function viewWissen() {
   const bar = p => `<div class="bar">${p.map(([c, f, m, l]) => `<div style="flex:${f};background:${c}"><b>${m}</b>${l}</div>`).join("")}</div>`;
   const R = "var(--red)", K = "#141414", G = "#7a7a7a", L = "#5a5a5a";
   V.innerHTML = `
-   <div class="sec-head"><h2>Wissen aus dem Kurs</h2><span class="note">J+S-Manual Fussball Kinder</span></div>
+   <div class="sec-head"><h2>Wissen</h2><span class="note">Kurs & Dokumente</span></div>
+   ${docsSection()}
    <section class="card pad stack"><h3>Trainingsaufbau <span class="muted small">S. 37</span></h3>
      <div class="steps">
       <div class="step"><b>Auffangen</b><p>Wer ankommt, spielt sofort: kleine Spiele (z. B. 3:3) auf vorbereiteten Kleinfeldern.</p></div>
@@ -322,6 +369,7 @@ function viewWissen() {
    <section class="card pad"><h3>Motivationskreislauf <span class="muted small">S. 34</span></h3>${WHEEL_MOT}<p class="small muted">Das erste «L», das Lachen, bringt den Kreislauf zum Laufen.</p></section>
    <section class="card pad"><h3>Merkpunkte <span class="muted small">S. 52</span></h3><ul class="plain">
      <li>Alle Kinder spielen mit, keine Ersatzspieler/innen.</li><li>Jedes Kind hat (s)einen Ball und erzielt Tore.</li><li>Kleine Teams und viele Tore garantieren Erfolgserlebnisse.</li><li>Viele Wiederholungen, möglichst wenig Wartezeiten.</li><li>Dabeibleiben statt ausscheiden.</li><li>Regeln gemeinsam festlegen und einhalten.</li><li>Alle helfen beim Auf- und Abbau.</li><li>Alle begrüssen und verabschieden sich voneinander.</li></ul></section>`;
+  bindDocs();
 }
 
 /* ================= Start ================= */
