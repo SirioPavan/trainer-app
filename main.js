@@ -273,7 +273,7 @@ function viewExercise(id) {
 }
 
 /* ================= Kader ================= */
-let editP = null, kaderMode = "kader", statRange = "season";
+let editP = null, openP = null, kaderMode = "kader", statRange = "season";
 function statData(range) {
   const td = db.today();
   const start = { season: td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01"), d30: new Date(Date.now() - 30 * 864e5).toLocaleDateString("sv-SE"), hall: "2026-10-21" }[range]
@@ -351,11 +351,14 @@ function viewKader() {
    <div class="sec-head"><h2>Kader ${esc(state.team.name)}</h2><span class="note">${ap.length} Kinder</span></div>
    <div class="card list">${ap.map(p => {
      const da = past.filter(t => state.attendance[t.id][p.id]).length;
-     return `<div class="row static" style="grid-template-columns:38px minmax(0,1fr) auto">
+     const open = openP === p.id;
+     return `<button class="row prow" data-open-p="${p.id}" aria-expanded="${open}" style="grid-template-columns:38px minmax(0,1fr) auto">
        <span class="avatar">${esc(p.name[0] || "?")}</span>
        <span class="mid"><b>${esc(p.name)}</b><span>${[p.year ? "Jg. " + p.year : "", past.length ? da + "/" + past.length + " Trainings" : "", p.nds_id ? "NDS " + esc(p.nds_id) : "ohne NDS-Nr."].filter(Boolean).join(" · ")}</span></span>
-       <button class="linkbtn" data-edit="${p.id}">Bearbeiten</button></div>
-       ${editP === p.id ? `${playerInfo(p)}<form class="inline editp" data-save="${p.id}">
+       <span class="chev">${open ? "⌄" : "›"}</span></button>
+       ${open ? `<div class="pdetail">${playerInfo(p) || `<p class="small muted pad">Keine weiteren Angaben. Importiere die Clubcorner-Liste, um Eltern-Kontakte zu ergänzen.</p>`}
+         <div class="btnrow pad" style="margin-top:0;padding-top:0"><button class="btn ghost" data-edit="${p.id}">${editP === p.id ? "Bearbeiten schliessen" : "Bearbeiten"}</button></div></div>` : ""}
+       ${open && editP === p.id ? `<form class="inline editp" data-save="${p.id}">
          <input name="name" value="${esc(p.name)}" required aria-label="Name"><input name="year" type="number" min="2010" max="2023" value="${p.year || ""}" aria-label="Jahrgang" placeholder="Jahrgang">
          <input name="nds" value="${esc(p.nds_id || "")}" inputmode="numeric" placeholder="NDS-Personen-ID" aria-label="NDS-Personen-ID">
          <button class="btn">Speichern</button><button type="button" class="btn ghost" data-off="${p.id}">Austragen</button></form>` : ""}`; }).join("") || '<p class="empty">Noch keine Kinder eingetragen. Füge das erste unten hinzu.</p>'}</div>
@@ -379,6 +382,7 @@ function viewKader() {
    ${state.mode === "cloud" ? `<button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
+  V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
   V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
   V.querySelectorAll("[data-save]").forEach(f => f.onsubmit = e => { e.preventDefault(); const id = f.dataset.save; editP = null;
     act(() => db.updatePlayer(id, { name: f.name.value.trim(), year: +f.year.value || null, nds_id: f.nds.value.trim() || null }), "Gespeichert"); });
