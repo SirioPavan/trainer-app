@@ -31,7 +31,8 @@ export async function init() {
     });
     const { data } = await sb.auth.getSession();
     state.user = data.session?.user || null;
-    sb.auth.onAuthStateChange((_e, session) => {
+    sb.auth.onAuthStateChange((ev, session) => {
+      if (ev === "PASSWORD_RECOVERY") { state.recovery = true; emit(); }
       const was = state.user?.id; state.user = session?.user || null;
       if (state.user?.id !== was) load().then(emit);
     });
@@ -53,6 +54,35 @@ export async function verifyCode(email, token) {
   const { data, error } = await sb.auth.verifyOtp({ email, token, type: "email" });
   if (error) throw error;
   state.user = data.user; await load(); emit();
+}
+const msgDe = e => {
+  const m = (e && e.message) || String(e);
+  if (/invalid login credentials/i.test(m)) return "E-Mail oder Passwort stimmt nicht.";
+  if (/already registered|already exists/i.test(m)) return "Für diese E-Mail gibt es schon ein Konto. Bitte «Anmelden» verwenden oder «Passwort vergessen».";
+  if (/at least|password should/i.test(m)) return "Das Passwort muss mindestens 8 Zeichen haben.";
+  if (/email not confirmed/i.test(m)) return "E-Mail noch nicht bestätigt. Der Admin muss in Supabase «Confirm email» ausschalten.";
+  if (/rate|seconds/i.test(m)) return "Bitte kurz warten und dann nochmals versuchen.";
+  return m;
+};
+export async function signInPassword(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(msgDe(error));
+  state.user = data.user; await load(); emit();
+}
+export async function signUpPassword(email, password) {
+  const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+  if (error) throw new Error(msgDe(error));
+  if (!data.session) throw new Error("Konto erstellt, aber noch nicht aktiv: In Supabase ist «Confirm email» noch eingeschaltet. Bitte dem Admin melden.");
+  state.user = data.user; await load(); emit();
+}
+export async function resetPassword(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) throw new Error(msgDe(error));
+}
+export async function setPassword(password) {
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) throw new Error(msgDe(error));
+  state.recovery = false; emit();
 }
 export async function signOut() { if (sb) await sb.auth.signOut(); state.user = null; emit(); }
 

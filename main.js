@@ -51,6 +51,7 @@ function render(keepScroll) {
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
   document.getElementById("teamName").textContent = state.team.name;
   if (!state.user) { nav.hidden = true; top.classList.add("bare"); viewLogin(); return; }
+  if (state.recovery) { nav.hidden = true; viewSetPassword(); return; }
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
   nav.hidden = false; top.classList.remove("bare");
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
@@ -63,35 +64,49 @@ function render(keepScroll) {
 }
 
 /* ================= Login ================= */
-let loginEmail = "";
+let loginMode = "in";
 function viewLogin() {
   document.getElementById("title").textContent = "Anmelden";
+  const tabs = [["in", "Anmelden"], ["up", "Erstes Mal hier?"]];
   V.innerHTML = `
    <section class="card pad login">
-     <h2>Willkommen</h2>
-     <p>Melde dich mit deiner E-Mail an. Du bekommst ein Mail mit einem Code und einem Link. Ein Passwort brauchst du nicht.</p>
-     <form id="login"><label for="em" class="lbl">E-Mail</label>
-       <input id="em" type="email" autocomplete="email" required placeholder="name@beispiel.ch" value="${esc(loginEmail)}">
-       <button class="btn">${loginEmail ? "Neues Mail senden" : "Login-Mail senden"}</button></form>
-     <p class="small muted" id="loginMsg">${loginEmail ? `Mail an <b>${esc(loginEmail)}</b> gesendet. Kein Mail? Schau im Spam-Ordner nach.` : ""}</p>
-     <form id="otp" ${loginEmail ? "" : "hidden"}><label for="code" class="lbl">Code aus dem Mail</label>
-       <input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="z. B. 123456">
-       <button class="btn">Anmelden</button>
-       <p class="small muted">Am besten den <b>Code</b> hier eintippen, dann bleibst du direkt in der App. Das ist wichtig, wenn die App als Symbol auf dem Startbildschirm liegt (vor allem auf dem iPhone).</p></form>
+     <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-lm="${k}" aria-selected="${loginMode === k}">${l}</button>`).join("")}</div>
+     ${loginMode === "in" ? `<h2>Willkommen zurück</h2>` : loginMode === "up" ? `<h2>Konto erstellen</h2>
+       <p class="small">Nimm die E-Mail, mit der du eingeladen wurdest, und wähle ein eigenes Passwort (mind. 8 Zeichen).</p>` : `<h2>Passwort vergessen</h2>
+       <p class="small">Du bekommst ein Mail mit einem Link. Darüber legst du ein neues Passwort fest.</p>`}
+     <form id="auth" class="stack">
+       <label class="lbl" for="em">E-Mail</label><input id="em" type="email" autocomplete="email" required placeholder="name@beispiel.ch">
+       ${loginMode !== "reset" ? `<label class="lbl" for="pw">Passwort</label>
+       <input id="pw" type="password" minlength="8" required autocomplete="${loginMode === "up" ? "new-password" : "current-password"}">` : ""}
+       ${loginMode === "up" ? `<label class="lbl" for="pw2">Passwort wiederholen</label><input id="pw2" type="password" minlength="8" required autocomplete="new-password">` : ""}
+       <button class="btn">${loginMode === "in" ? "Anmelden" : loginMode === "up" ? "Konto erstellen" : "Link senden"}</button></form>
+     <p class="small" id="loginMsg" aria-live="polite"></p>
+     ${loginMode === "in" ? `<button class="linkbtn" data-lm="reset">Passwort vergessen?</button>` : loginMode === "reset" ? `<button class="linkbtn" data-lm="in">‹ Zurück zum Anmelden</button>` : ""}
    </section>`;
-  V.querySelector("#login").onsubmit = async e => {
+  V.querySelectorAll("[data-lm]").forEach(b => b.onclick = () => { loginMode = b.dataset.lm; viewLogin(); });
+  V.querySelector("#auth").onsubmit = async e => {
     e.preventDefault();
-    const em = V.querySelector("#em").value.trim(), msg = V.querySelector("#loginMsg");
-    msg.textContent = "Sende Mail …";
-    try { await db.sendLoginLink(em); loginEmail = em; viewLogin(); V.querySelector("#code").focus(); }
-    catch (err) { msg.textContent = /rate|seconds/i.test(err.message || "") ? "Bitte kurz warten und dann nochmals versuchen (zu viele Mails in kurzer Zeit)." : "Das hat nicht geklappt: " + (err.message || err); }
+    const em = V.querySelector("#em").value.trim().toLowerCase(), msg = V.querySelector("#loginMsg"), btn = e.target.querySelector(".btn");
+    const pw = V.querySelector("#pw")?.value, pw2 = V.querySelector("#pw2")?.value;
+    if (loginMode === "up" && pw !== pw2) { msg.textContent = "Die beiden Passwörter stimmen nicht überein."; return; }
+    btn.disabled = true; msg.textContent = "Einen Moment …";
+    try {
+      if (loginMode === "in") await db.signInPassword(em, pw);
+      else if (loginMode === "up") await db.signUpPassword(em, pw);
+      else { await db.resetPassword(em); msg.innerHTML = `Mail an <b>${esc(em)}</b> gesendet. Link öffnen und dort ein neues Passwort festlegen (evtl. im Spam-Ordner).`; btn.disabled = false; }
+    } catch (err) { msg.textContent = err.message || String(err); btn.disabled = false; }
   };
-  const of = V.querySelector("#otp");
-  of.onsubmit = async e => {
-    e.preventDefault();
-    const btn = of.querySelector(".btn"); btn.disabled = true;
-    try { await db.verifyCode(loginEmail, V.querySelector("#code").value.trim()); }
-    catch (err) { btn.disabled = false; toast("Code ungültig oder abgelaufen. Fordere ein neues Mail an.", true); }
+}
+function viewSetPassword() {
+  document.getElementById("title").textContent = "Neues Passwort";
+  V.innerHTML = `<section class="card pad login"><h2>Neues Passwort festlegen</h2>
+    <form id="np" class="stack"><label class="lbl" for="np1">Neues Passwort (mind. 8 Zeichen)</label><input id="np1" type="password" minlength="8" required autocomplete="new-password">
+    <label class="lbl" for="np2">Wiederholen</label><input id="np2" type="password" minlength="8" required autocomplete="new-password">
+    <button class="btn">Speichern</button></form><p class="small" id="npMsg"></p></section>`;
+  V.querySelector("#np").onsubmit = async e => {
+    e.preventDefault(); const a = V.querySelector("#np1").value, b = V.querySelector("#np2").value, msg = V.querySelector("#npMsg");
+    if (a !== b) { msg.textContent = "Die beiden Passwörter stimmen nicht überein."; return; }
+    try { await db.setPassword(a); toast("Passwort gespeichert"); } catch (err) { msg.textContent = err.message; }
   };
 }
 function viewNoAccess() {
@@ -289,7 +304,7 @@ const APP_URL = location.origin + location.pathname;
 function inviteText(p) {
   const name = (p.display_name || "").split(" ")[0];
   return `Hallo${name ? " " + name : ""}! Du hast jetzt Zugriff auf die Trainer-App der ${state.team.name} (FC Seuzach).\n\n` +
-    `1. Öffne ${APP_URL}\n2. Gib deine E-Mail ${p.email} ein und tippe auf «Login-Link senden»\n3. Öffne das Mail von Supabase und tippe auf den Link (evtl. im Spam-Ordner)\n\n` +
+    `1. Öffne ${APP_URL}\n2. Tippe auf «Erstes Mal hier?»\n3. Gib deine E-Mail ${p.email} ein, wähle ein eigenes Passwort und tippe auf «Konto erstellen»\n\n` +
     `Tipp: Danach im Browser-Menü «Zum Startbildschirm hinzufügen», dann hast du die App wie eine normale App auf dem Handy.`;
 }
 function shareBox(p) {
@@ -408,8 +423,10 @@ function viewKader() {
       <input id="iname" placeholder="Name" aria-label="Name">
       <select id="irole" aria-label="Rolle"><option value="trainer">Trainer/in</option><option value="admin">Admin (darf einladen)</option></select>
       <button class="btn">Einladen</button></form>
-      <p class="small muted">«Einladen» schaltet die E-Mail frei. Danach schickst du der Person die Einladungsnachricht (per WhatsApp, E-Mail oder kopiert). Sie öffnet die App, gibt genau diese E-Mail ein und tippt auf den Login-Link.</p>` : ""}
-   ${state.mode === "cloud" ? `<button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
+      <p class="small muted">«Einladen» schaltet die E-Mail frei. Danach schickst du der Person die Einladungsnachricht (per WhatsApp, E-Mail oder kopiert). Sie öffnet die App, tippt auf «Erstes Mal hier?» und erstellt mit genau dieser E-Mail ein Konto mit eigenem Passwort.</p>` : ""}
+   ${state.mode === "cloud" ? `<details class="card pad addbox"><summary class="lbl">Mein Passwort festlegen / ändern</summary>
+      <form class="inline" id="mypw" style="margin-top:10px"><input id="mypw1" type="password" minlength="8" required placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" aria-label="Neues Passwort"><button class="btn">Speichern</button></form></details>
+      <button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
   V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
@@ -449,6 +466,8 @@ function viewKader() {
     if (b.dataset.armed) act(() => db.removeMember(state.people[+b.dataset.rm]), "Entfernt");
     else { b.dataset.armed = 1; b.textContent = "Sicher? Nochmals tippen"; }
   });
+  const mp = V.querySelector("#mypw");
+  if (mp) mp.onsubmit = e => { e.preventDefault(); act(() => db.setPassword(V.querySelector("#mypw1").value), "Passwort gespeichert"); };
   const out = V.querySelector("[data-out]"); if (out) out.onclick = () => db.signOut();
   const rs = V.querySelector("[data-reset]"); if (rs) rs.onclick = () => { db.resetDemo(); toast("Demo zurückgesetzt"); };
 }
