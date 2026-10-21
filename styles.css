@@ -5,7 +5,7 @@
   --red:#D2161E; --red-ink:#B5121A; --black:#141414; --ok:#1F8A4C; --warn:#B26A00;
   --teamA:#E3561B; --teamB:#2A5BD7; --joker:#F2C230;
   --grass:#3D8B4C; --grass2:#378145; --wood:#DDB884; --wood2:#D6AF79;
-  --p-auf:#8C6BB1; --p-ein:#2E8C88; --p-sp:#D2161E; --p-le:#2A5BD7; --p-vi:#5E9E3A; --p-aus:#7A7F7C;
+  --p-auf:#A8A2A2; --p-ein:#6E6868; --p-sp:#D2161E; --p-le:#141414; --p-vi:#8B1016; --p-aus:#4A4545;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
@@ -14,14 +14,14 @@
   --red:#E8323A; --red-ink:#FF6B70; --black:#000000; --ok:#4CC27E; --warn:#E3A13B;
   --teamA:#F27A45; --teamB:#5B86F0; --joker:#F2C230;
   --grass:#2F6E3C; --grass2:#2B6637; --wood:#B8925E; --wood2:#B08A57;
-  --p-auf:#A98BD0; --p-ein:#45B0AB; --p-sp:#E8323A; --p-le:#6E95F2; --p-vi:#7DBE58; --p-aus:#9AA09C;
+  --p-auf:#9A9494; --p-ein:#6E6868; --p-sp:#E8323A; --p-le:#2E2A2A; --p-vi:#A3151C; --p-aus:#55504F;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E0E0E; --surface:#1A1919; --ink:#EDEAEA; --muted:#A49C9C; --line:#2E2A2A; --soft:#2A1C1C;
   --red:#E8323A; --red-ink:#FF6B70; --black:#000000; --ok:#4CC27E; --warn:#E3A13B;
   --teamA:#F27A45; --teamB:#5B86F0; --joker:#F2C230;
   --grass:#2F6E3C; --grass2:#2B6637; --wood:#B8925E; --wood2:#B08A57;
-  --p-auf:#A98BD0; --p-ein:#45B0AB; --p-sp:#E8323A; --p-le:#6E95F2; --p-vi:#7DBE58; --p-aus:#9AA09C;
+  --p-auf:#9A9494; --p-ein:#6E6868; --p-sp:#E8323A; --p-le:#2E2A2A; --p-vi:#A3151C; --p-aus:#55504F;
   color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0}
@@ -265,3 +265,21 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .pdetail{background:var(--surface);border-top:1px dashed var(--line);padding-top:10px}
 .prow[aria-expanded="true"]{background:var(--soft)}
 .guard a{display:inline-block;padding:4px 0}
+
+.flow4{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:0}
+.flow4 li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;position:relative;padding-bottom:14px}
+.flow4 li:last-child{padding-bottom:0}
+.flow4 li:not(:last-child)::before{content:"";position:absolute;left:16px;top:34px;bottom:0;width:2px;background:linear-gradient(var(--pc),var(--line))}
+.flow4 .fn{width:34px;height:34px;border-radius:50%;background:var(--pc);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:800;font-size:18px;position:relative;z-index:1}
+.flow4 li>div{border-left:4px solid var(--pc);background:color-mix(in srgb,var(--pc) 9%,var(--surface));border-radius:0 10px 10px 0;padding:8px 12px;min-width:0}
+.flow4 b{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:18px;letter-spacing:.02em;color:var(--pc)}
+.flow4 .fw{float:right;font-size:12px;font-weight:700;color:var(--muted);margin-top:4px}
+.flow4 p{margin:4px 0 0;font-size:14px}
+.hpgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}
+.hpc{background:var(--hc);color:#fff;border-radius:7px;padding:6px 8px;font-size:12.5px;font-weight:700;text-align:center;line-height:1.2}
+@media (min-width:560px){.hpgrid{grid-template-columns:repeat(4,1fr)}}
+/* dunkles «Schwarz» im Dark Mode sichtbar halten */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tl div,:root:not([data-theme="light"]) .hpc{outline:1px solid rgba(255,255,255,.12);outline-offset:-1px}}
+:root[data-theme="dark"] .tl div,:root[data-theme="dark"] .hpc{outline:1px solid rgba(255,255,255,.12);outline-offset:-1px}
+.flow4 b{color:color-mix(in srgb,var(--pc) 70%,var(--ink))}
+.flow4 .hp4 b{color:var(--red-ink)}

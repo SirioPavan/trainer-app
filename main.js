@@ -245,16 +245,15 @@ function viewLibrary() {
     V.querySelectorAll("[data-tpl]").forEach(b => b.onclick = () => go({ tab: "uebungen", training: "tpl:" + b.dataset.tpl }));
     return;
   }
-  const items = state.exercises.filter(e => (fph === "all" || e.ph === fph) && (fpl === "all" || (fpl === "sfv" ? /^SFV/.test(e.src || "") : e.place === fpl && !/^SFV/.test(e.src || ""))) && (!q || (e.name + " " + (e.org || "") + " " + (e.ablauf || e.offen || "")).toLowerCase().includes(q.toLowerCase())))
+  const items = state.exercises.filter(e => (fph === "all" || e.ph === fph) && true && (!q || (e.name + " " + (e.org || "") + " " + (e.ablauf || e.offen || "")).toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => Object.keys(PH).indexOf(a.ph) - Object.keys(PH).indexOf(b.ph));
   V.innerHTML = modeBar + `
    <div class="sec-head"><h2>Übungen</h2><span class="note">${state.exercises.length} Lernbausteine</span></div>
    <input class="search" id="q" type="search" placeholder="Übung suchen, z. B. Tigerball" value="${esc(q)}" aria-label="Übung suchen">
    <div class="chips" role="group" aria-label="Phase">${[["all", "Alle Phasen"], ["auf", "Auffangen"], ["ein", "Einleitung"], ["sp", "Spielen"], ["le", "Lernen"], ["vi", "Vielseitigkeit"], ["aus", "Ausklang"]].map(([k, l]) => `<button class="chip" data-ph="${k}" aria-pressed="${fph === k}">${l}</button>`).join("")}</div>
-   <div class="chips" role="group" aria-label="Ort">${[["all", "Alle Quellen"], ["grass", "Manual Rasen"], ["hall", "Manual Halle"], ["sfv", "SFV-Karten"]].map(([k, l]) => `<button class="chip" data-pl="${k}" aria-pressed="${fpl === k}">${l}</button>`).join("")}</div>
    <div class="card list">${items.map(e => `<button class="row" data-ex="${e.id}" style="grid-template-columns:8px minmax(0,1fr) auto">
       <span class="phbar" style="background:var(${PH[e.ph].c})"></span>
-      <span class="mid"><b>${esc(e.name)}</b><span>${PH[e.ph].t.replace("Hauptteil · ", "")} · ${/^SFV/.test(e.src || "") ? "SFV-Karte" : PLACE[e.place]}${e.page ? " · " + (/^\d/.test(e.page) ? "S. " : "") + esc(e.page) : ""}${(e.videos || []).length || state.links.some(l => l.exercise_id === e.id) ? " · ▶ Video" : ""}</span></span><span class="chev">›</span></button>`).join("") || '<p class="empty">Keine Übung passt zum Filter.</p>'}</div>`;
+      <span class="mid"><b>${esc(e.name)}</b><span>${PH[e.ph].t.replace("Hauptteil · ", "")}${e.page ? " · " + (/^\d/.test(e.page) ? "S. " : "") + esc(e.page) : ""}${(e.videos || []).length || state.links.some(l => l.exercise_id === e.id) ? " · ▶ Video" : ""}</span></span><span class="chev">›</span></button>`).join("") || '<p class="empty">Keine Übung passt zum Filter.</p>'}</div>`;
   const qi = V.querySelector("#q"); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; render(); const n2 = V.querySelector("#q"); n2.focus(); n2.setSelectionRange(p, p); };
   V.querySelectorAll("[data-ph]").forEach(b => b.onclick = () => { fph = b.dataset.ph; render(true); });
   V.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { fpl = b.dataset.pl; render(true); });
@@ -523,11 +522,18 @@ function viewWissen() {
    ${docsSection()}
    ${rulesSection()}
    <section class="card pad stack"><h3>Trainingsaufbau <span class="muted small">S. 37</span></h3>
-     <div class="steps">
-      <div class="step"><b>Auffangen</b><p>Wer ankommt, spielt sofort: kleine Spiele (z. B. 3:3) auf vorbereiteten Kleinfeldern.</p></div>
-      <div class="step"><b>Einleitung</b><p>Jedes Kind hat einen eigenen Ball, möglichst viele Ballkontakte.</p></div>
-      <div class="step main"><b>Hauptteil</b><p>Fussball spielen · Fussball spielen lernen · Vielseitigkeit erleben. Das Spielen rahmt den Hauptteil ein.</p></div>
-      <div class="step"><b>Ausklang</b><p>Ruhiges Spiel, Schlusswort, persönliche Verabschiedung.</p></div></div></section>
+     <ol class="flow4">
+      <li style="--pc:var(--p-auf)"><span class="fn">1</span><div><b>Auffangen</b><span class="fw">vor Trainingsbeginn</span><p>Wer ankommt, spielt sofort: kleine Spiele (z. B. 3:3) auf vorbereiteten Kleinfeldern.</p></div></li>
+      <li style="--pc:var(--p-ein)"><span class="fn">2</span><div><b>Einleitung</b><span class="fw">10–15 Min.</span><p>Jedes Kind hat einen eigenen Ball, möglichst viele Ballkontakte.</p></div></li>
+      <li class="hp4" style="--pc:var(--p-sp)"><span class="fn">3</span><div><b>Hauptteil</b><span class="fw">55–65 Min.</span>
+        <div class="hpgrid">
+          <span class="hpc" style="--hc:var(--p-sp)">Fussball spielen</span>
+          <span class="hpc" style="--hc:var(--p-le)">Fussball spielen lernen</span>
+          <span class="hpc" style="--hc:var(--p-vi)">Vielseitigkeit erleben</span>
+          <span class="hpc" style="--hc:var(--p-sp)">Fussball spielen</span>
+        </div><p>Das Spielen rahmt den Hauptteil ein: Am Anfang und am Ende wird gespielt, dazwischen gelernt und vielseitig bewegt.</p></div></li>
+      <li style="--pc:var(--p-aus)"><span class="fn">4</span><div><b>Ausklang</b><span class="fw">ca. 10 Min.</span><p>Ruhiges Spiel, Schlusswort, persönliche Verabschiedung.</p></div></li>
+     </ol></section>
    <section class="card pad stack"><h3>Zeitplan</h3><div class="tbars">
      <div><b class="small">90 Min.</b> <span class="small muted">Beispiel Kat. E, S. 58–59</span>${bar([[G, 15, "15'", "Einleitung"], [R, 15, "15'", "Spielen"], [K, 15, "15'", "Lernen"], [L, 15, "15'", "Vielseitigk."], [R, 20, "20'", "Match"], [G, 10, "10'", "Ausklang"]])}</div>
      <div><b class="small">75 Min.</b> <span class="small muted">Beispiel Kat. G, S. 54–55</span>${bar([[G, 10, "10'", "Einleitung"], [R, 10, "10'", "Spielen"], [K, 15, "15'", "Lernen"], [L, 10, "10'", "Vielseitigk."], [R, 20, "20'", "Match"], [G, 10, "10'", "Ausklang"]])}</div>
