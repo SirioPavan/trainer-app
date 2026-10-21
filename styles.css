@@ -283,3 +283,6 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 :root[data-theme="dark"] .tl div,:root[data-theme="dark"] .hpc{outline:1px solid rgba(255,255,255,.12);outline-offset:-1px}
 .flow4 b{color:color-mix(in srgb,var(--pc) 70%,var(--ink))}
 .flow4 .hp4 b{color:var(--red-ink)}
+.sharebox{padding:10px 14px 14px;border-top:1px dashed var(--line);background:var(--soft)}
+.sharebox textarea{width:100%;font-size:13px;border:1.5px solid var(--line);border-radius:10px;padding:8px;background:var(--surface)}
+.sharebox .btn{text-decoration:none;display:inline-flex;align-items:center}

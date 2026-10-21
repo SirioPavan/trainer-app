@@ -272,6 +272,23 @@ function viewExercise(id) {
 }
 
 /* ================= Kader ================= */
+let shareFor = null;
+const APP_URL = location.origin + location.pathname;
+function inviteText(p) {
+  const name = (p.display_name || "").split(" ")[0];
+  return `Hallo${name ? " " + name : ""}! Du hast jetzt Zugriff auf die Trainer-App der ${state.team.name} (FC Seuzach).\n\n` +
+    `1. Öffne ${APP_URL}\n2. Gib deine E-Mail ${p.email} ein und tippe auf «Login-Link senden»\n3. Öffne das Mail von Supabase und tippe auf den Link (evtl. im Spam-Ordner)\n\n` +
+    `Tipp: Danach im Browser-Menü «Zum Startbildschirm hinzufügen», dann hast du die App wie eine normale App auf dem Handy.`;
+}
+function shareBox(p) {
+  const t = inviteText(p), enc = encodeURIComponent(t);
+  return `<div class="sharebox"><p class="small lbl">Einladung für ${esc(p.display_name || p.email)}</p>
+    <textarea readonly rows="7" id="invtext">${esc(t)}</textarea>
+    <div class="btnrow" style="margin-top:6px">
+      <a class="btn" href="https://wa.me/?text=${enc}" target="_blank" rel="noopener">Per WhatsApp</a>
+      <a class="btn ghost" href="mailto:${esc(p.email)}?subject=${encodeURIComponent("Zugang Trainer-App " + state.team.name)}&body=${enc}">Per E-Mail</a>
+      <button class="btn ghost" data-copy>Text kopieren</button></div></div>`;
+}
 let editP = null, openP = null, kaderMode = "kader", statRange = "season";
 function statData(range) {
   const td = db.today();
@@ -371,13 +388,15 @@ function viewKader() {
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span></span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
-      ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>`).join("")}</div>
+      ${isAdmin() && p.pending ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
+      ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
+      ${shareFor === p.email ? shareBox(p) : ""}`).join("")}</div>
    ${isAdmin() ? `<form class="inline card pad" id="inv">
       <input id="ie" type="email" required placeholder="E-Mail der Trainerin / des Trainers" aria-label="E-Mail">
       <input id="iname" placeholder="Name" aria-label="Name">
       <select id="irole" aria-label="Rolle"><option value="trainer">Trainer/in</option><option value="admin">Admin (darf einladen)</option></select>
       <button class="btn">Einladen</button></form>
-      <p class="small muted">So funktioniert es: Die Person öffnet die App, gibt genau diese E-Mail ein und tippt auf den Link im Mail. Sie hat dann Zugriff auf diese Mannschaft.</p>` : ""}
+      <p class="small muted">«Einladen» schaltet die E-Mail frei. Danach schickst du der Person die Einladungsnachricht (per WhatsApp, E-Mail oder kopiert). Sie öffnet die App, gibt genau diese E-Mail ein und tippt auf den Login-Link.</p>` : ""}
    ${state.mode === "cloud" ? `<button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
@@ -408,7 +427,12 @@ function viewKader() {
   V.querySelectorAll("[data-off]").forEach(b => b.onclick = () => { editP = null; act(() => db.setPlayerActive(b.dataset.off, false), "Ausgetragen"); });
   V.querySelectorAll("[data-on]").forEach(b => b.onclick = () => act(() => db.setPlayerActive(b.dataset.on, true), "Wieder aufgenommen"));
   const inv = V.querySelector("#inv");
-  if (inv) inv.onsubmit = e => { e.preventDefault(); act(() => db.inviteTrainer(V.querySelector("#ie").value, V.querySelector("#iname").value.trim(), V.querySelector("#irole").value), "Einladung gespeichert"); };
+  if (inv) inv.onsubmit = e => { e.preventDefault(); const em = V.querySelector("#ie").value.trim().toLowerCase(); shareFor = em;
+    act(() => db.inviteTrainer(em, V.querySelector("#iname").value.trim(), V.querySelector("#irole").value), "Freigeschaltet – jetzt Einladung senden"); };
+  V.querySelectorAll("[data-share]").forEach(b => b.onclick = () => { const p = state.people[+b.dataset.share]; shareFor = shareFor === p.email ? null : p.email; render(true); });
+  const cp = V.querySelector("[data-copy]");
+  if (cp) cp.onclick = async () => { const ta = V.querySelector("#invtext");
+    try { await navigator.clipboard.writeText(ta.value); toast("Text kopiert"); } catch (e) { ta.select(); toast("Text markiert – jetzt kopieren"); } };
   V.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
     if (b.dataset.armed) act(() => db.removeMember(state.people[+b.dataset.rm]), "Entfernt");
     else { b.dataset.armed = 1; b.textContent = "Sicher? Nochmals tippen"; }
