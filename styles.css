@@ -290,3 +290,64 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 #otp{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:12px}
 #otp[hidden]{display:none}
 #code{font-size:22px;letter-spacing:.2em;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ===== PDF-Export (feste helle Farben, unabhängig vom Dunkelmodus) ===== */
+.pdfbtn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 11px}
+.pdfbtn svg{width:16px;height:16px}
+.pdfbtn[disabled]{opacity:.6;cursor:wait}
+.dtools{display:flex;justify-content:flex-end;margin-top:-4px}
+.pdfsheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:60;padding:16px}
+.pdfsheet-in{background:var(--surface);color:var(--ink);border-radius:14px;padding:16px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:6px;margin-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+.pdfsheet-in .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pdfsheet-in a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.pdfhost{position:fixed;left:-20000px;top:0;z-index:-1;pointer-events:none}
+.pdfp{background:#fff;color:#151515;font-family:"Source Sans 3",system-ui,sans-serif;display:flex;flex-direction:column;padding:26px 30px 16px;box-sizing:border-box;overflow:hidden;line-height:1.3}
+.pdfp *{box-sizing:border-box}
+.pdf-band{display:flex;align-items:center;gap:14px;background:#141414;color:#fff;border-radius:8px;padding:10px 16px;border-bottom:4px solid #D2161E;flex:none}
+.pdf-band img{height:44px;width:auto}
+.pdf-tt{display:flex;flex-direction:column;min-width:0}
+.pdf-club{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#ff5a60}
+.pdf-tt b{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:24px;text-transform:uppercase;line-height:1.05}
+.pdf-sub{font-size:12px;color:#d9d4d4}
+.pdf-right{margin-left:auto;font-size:11px;color:#bdb6b6;text-align:right}
+.pdfp-body{flex:1;min-height:0;overflow:hidden;margin-top:12px}
+.pdfp-foot{flex:none;display:flex;justify-content:space-between;font-size:9.5px;color:#7a7474;border-top:1px solid #e0dada;padding-top:5px;margin-top:6px}
+/* Übersicht */
+.pdf-plan{width:100%;border-collapse:collapse;table-layout:fixed;font-size:var(--pfs,10px)}
+.pdf-plan th{font-family:"Barlow Condensed",sans-serif;font-weight:800;text-transform:uppercase;font-size:calc(var(--pfs,10px) + 1px);letter-spacing:.03em;text-align:left;padding:4px 5px;border-top:4px solid #141414;background:#F3F1F1;vertical-align:bottom}
+.pdf-plan td{padding:3px 5px;border-bottom:1px solid #e6e0e0;vertical-align:top;overflow-wrap:anywhere}
+.pdf-plan tbody tr:nth-child(even):not(.pdf-month):not(.pdf-tour) td{background:#FAF8F8}
+.pdf-plan .c-d{font-weight:700;white-space:nowrap}
+.pdf-plan .c-z{white-space:nowrap}
+.pdf-mut{color:#7a7474}
+.pdf-min{color:#9a9494;font-size:.88em;margin-left:3px;white-space:nowrap}
+.pdf-month td{font-family:"Barlow Condensed",sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#B5121A;font-size:calc(var(--pfs,10px) + 1.5px);padding:7px 5px 2px;border-bottom:1.5px solid #D2161E}
+.pdf-tour td{background:#141414;color:#fff;border-bottom:1px solid #fff}
+.pdf-tour td:first-child{box-shadow:inset 4px 0 0 #D2161E}
+.pdf-st{float:right;font-size:.9em;color:#ffb3b6;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+/* Einzeltraining */
+.pdf-intro{margin-bottom:10px}
+.pdf-facts{display:grid;grid-template-columns:78px 1fr;gap:4px 12px;margin:0 0 10px;font-size:12.5px;background:#F7F4F4;border-radius:8px;padding:10px 12px}
+.pdf-facts dt{font-weight:800;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;color:#B5121A;padding-top:2px}
+.pdf-facts dd{margin:0}
+.pdf-tl{display:flex;gap:2px;border-radius:6px;overflow:hidden;height:38px}
+.pdf-tl div{color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0;padding:0 2px;text-align:center}
+.pdf-tl b{font-size:13px;line-height:1}
+.pdf-tl span{font-size:8.5px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdf-ex{margin-top:10px;border:1px solid #e3dddd;border-radius:8px;overflow:hidden}
+.pdf-ph{display:flex;align-items:center;gap:8px;font-family:"Barlow Condensed",sans-serif;font-weight:800;text-transform:uppercase;font-size:14px;letter-spacing:.03em;padding:5px 10px;background:#F3F1F1;border-left:6px solid}
+.pdf-ph i{display:none}
+.pdf-ph span{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:12px;color:#5F5A5A}
+.pdf-exb{display:flex;gap:12px;padding:9px 10px}
+.pdf-sk{flex:none;width:220px}
+.pdf-sk img{display:block;border-radius:6px}
+.pdf-ext{flex:1;min-width:0;font-size:11.5px}
+.pdf-ext h4{margin:0 0 4px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:17px;line-height:1.1;display:flex;gap:8px;align-items:baseline}
+.pdf-pg{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:10px;font-weight:700;color:#7a7474;white-space:nowrap}
+.pdf-ext p{margin:0 0 4px}
+.pdf-ext ul{margin:0 0 4px;padding-left:16px}
+.pdf-ext b{color:#141414}
+.pdf-var{color:#5F5A5A}
+.pdf-fahr{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}
+.pdf-fahr div{background:#F7F4F4;border-radius:6px;padding:5px 7px;font-size:10.5px}
+.pdf-fahr b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#B5121A}

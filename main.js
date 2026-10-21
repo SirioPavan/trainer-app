@@ -3,6 +3,7 @@ import * as db from "./store.js";
 import { state } from "./store.js";
 import { PH, drawDiagram } from "./diagram.js";
 import { WHEEL_VAR, WHEEL_MOT } from "./wissen.js";
+import * as pdf from "./pdf.js";
 
 const PLACE = { grass: "Rasen", hall: "Halle" };
 const ST = { eingeteilt: "ok", angemeldet: "ok", Warteliste: "wait", abgesagt: "open" };
@@ -26,6 +27,17 @@ async function act(fn, ok) {
   try { await fn(); if (ok) toast(ok); }
   catch (e) { console.error(e); toast("Speichern hat nicht geklappt: " + (e.message || e) + ". Bitte Verbindung prüfen.", true); }
   render(true);
+}
+
+
+/* ================= PDF ================= */
+const PDF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/></svg>';
+async function makePdf(btn, job) {
+  if (btn.disabled) return;
+  const txt = btn.innerHTML; btn.disabled = true; btn.innerHTML = PDF_ICON + "PDF wird erstellt …";
+  try { pdf.offer(await job()); }
+  catch (e) { console.error(e); toast("PDF ging nicht: " + (e.message || e), true); }
+  finally { btn.disabled = false; btn.innerHTML = txt; }
 }
 
 /* ================= Navigation ================= */
@@ -139,6 +151,7 @@ function viewDashboard() {
      <b>${dparts(nt.date).full}${nt.time ? " · " + esc(nt.time) : ""}</b>
      <span class="muted small">${esc(nt.place)}${nt.org ? " · Veranstalter: " + esc(nt.org) : ""}</span></button>` : ""}
    <div class="sec-head"><h2>Termine</h2><span class="note">${list.length} Trainings · ${tours.length} Turniere</span></div>
+   <div class="dtools"><button class="btn ghost pdfbtn" data-planpdf>${PDF_ICON}Trainingsplan als PDF</button></div>
    <div class="chips" role="group" aria-label="Filter">
      ${[["all", "Alles"], ["train", "Trainings"], ["tour", "Turniere"]].map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filt === k}">${l}</button>`).join("")}</div>
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
@@ -152,6 +165,7 @@ function viewDashboard() {
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   const mb = V.querySelector("[data-more]"); if (mb) mb.onclick = () => { showAll = !showAll; render(true); };
+  V.querySelector("[data-planpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.planPdf());
   V.querySelector("#addt").onsubmit = e => { e.preventDefault(); act(() => db.addTraining(V.querySelector("#tdate").value, V.querySelector("#ttpl").value), "Training angelegt"); };
 }
 function rowT(t) {
@@ -218,7 +232,7 @@ function viewTraining(id) {
   const d = isTpl ? { full: "Vorlage" } : dparts(t.date), total = mins(t), a = state.attendance[t.id] || {}, ap = activePlayers(), c = attCount(t), n = ap.length;
   const used = [...new Set(t.blocks.map(b => b.ph))];
   V.innerHTML = `
-   <button class="back" data-back>‹ ${isTpl ? "Trainingsvorlagen" : "Planung"}</button>
+   <div class="sec-head"><button class="back" data-back>‹ ${isTpl ? "Trainingsvorlagen" : "Planung"}</button><button class="btn ghost pdfbtn" data-trpdf>${PDF_ICON}Als PDF</button></div>
    <section class="dhead">
      <h2>${isTpl ? esc(t.title) : d.full}</h2>
      <div><span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> <span class="muted small">${t.start}–${t.end} · ${total} Min.</span></div>
@@ -240,6 +254,7 @@ function viewTraining(id) {
    ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t, t.place === "hall" ? "hall" : "grass")}</section>`).join("")}
    ${isTpl ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: isTpl ? "uebungen" : "trainings" });
+  V.querySelector("[data-trpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.trainingPdf(t, isTpl));
   bindVideos();
   if (isTpl) return;
   const dd = V.querySelector("#attd"); if (dd) dd.ontoggle = () => { attOpen[t.id] = dd.open; };

@@ -17,7 +17,7 @@ function wavy(x1,y1,x2,y2){
   const ux=dx/L,uy=dy/L,px=-uy,py=ux;let d=`M${x1},${y1}`;
   for(let i=1;i<=n;i++){const t=i/n,a=(i===n)?0:(i%2?1.2:-1.2);d+=` L${(x1+dx*t+px*a).toFixed(2)},${(y1+dy*t+py*a).toFixed(2)}`}
   return d}
-const F='font-family="Source Sans 3,system-ui,sans-serif" font-weight="700"';
+const F='font-family="\x27Source Sans 3\x27,Arial,sans-serif" font-weight="700"';
 export function drawDiagram(d){
   const id="m"+(uid++);
   const hall=d.s==="hall";
