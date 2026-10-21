@@ -47,7 +47,7 @@ navEl.addEventListener("click", e => { const b = e.target.closest("button"); if 
 function render(keepScroll) {
   const y = window.scrollY;
   const nav = document.querySelector(".nav"), top = document.querySelector(".top");
-  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : (isAdmin() ? "Admin" : "Trainer");
+  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isAdmin() ? "Admin" : "Trainer");
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
   document.getElementById("teamName").textContent = state.team.name;
   if (!state.user) { nav.hidden = true; top.classList.add("bare"); viewLogin(); return; }
@@ -63,23 +63,35 @@ function render(keepScroll) {
 }
 
 /* ================= Login ================= */
+let loginEmail = "";
 function viewLogin() {
   document.getElementById("title").textContent = "Anmelden";
   V.innerHTML = `
    <section class="card pad login">
      <h2>Willkommen</h2>
-     <p>Melde dich mit deiner E-Mail an. Du bekommst einen Link, mit dem du direkt in der App bist. Ein Passwort brauchst du nicht.</p>
+     <p>Melde dich mit deiner E-Mail an. Du bekommst ein Mail mit einem Code und einem Link. Ein Passwort brauchst du nicht.</p>
      <form id="login"><label for="em" class="lbl">E-Mail</label>
-       <input id="em" type="email" autocomplete="email" required placeholder="name@beispiel.ch">
-       <button class="btn">Login-Link senden</button></form>
-     <p class="small muted" id="loginMsg"></p>
+       <input id="em" type="email" autocomplete="email" required placeholder="name@beispiel.ch" value="${esc(loginEmail)}">
+       <button class="btn">${loginEmail ? "Neues Mail senden" : "Login-Mail senden"}</button></form>
+     <p class="small muted" id="loginMsg">${loginEmail ? `Mail an <b>${esc(loginEmail)}</b> gesendet. Kein Mail? Schau im Spam-Ordner nach.` : ""}</p>
+     <form id="otp" ${loginEmail ? "" : "hidden"}><label for="code" class="lbl">Code aus dem Mail</label>
+       <input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required placeholder="z. B. 123456">
+       <button class="btn">Anmelden</button>
+       <p class="small muted">Am besten den <b>Code</b> hier eintippen, dann bleibst du direkt in der App. Das ist wichtig, wenn die App als Symbol auf dem Startbildschirm liegt (vor allem auf dem iPhone).</p></form>
    </section>`;
   V.querySelector("#login").onsubmit = async e => {
     e.preventDefault();
     const em = V.querySelector("#em").value.trim(), msg = V.querySelector("#loginMsg");
-    msg.textContent = "Sende Link …";
-    try { await db.sendLoginLink(em); msg.innerHTML = `Link an <b>${esc(em)}</b> gesendet. Öffne die E-Mail auf diesem Gerät und tippe auf den Link. Kein Mail? Schau im Spam-Ordner nach.`; }
-    catch (err) { msg.textContent = "Das hat nicht geklappt: " + (err.message || err); }
+    msg.textContent = "Sende Mail …";
+    try { await db.sendLoginLink(em); loginEmail = em; viewLogin(); V.querySelector("#code").focus(); }
+    catch (err) { msg.textContent = /rate|seconds/i.test(err.message || "") ? "Bitte kurz warten und dann nochmals versuchen (zu viele Mails in kurzer Zeit)." : "Das hat nicht geklappt: " + (err.message || err); }
+  };
+  const of = V.querySelector("#otp");
+  of.onsubmit = async e => {
+    e.preventDefault();
+    const btn = of.querySelector(".btn"); btn.disabled = true;
+    try { await db.verifyCode(loginEmail, V.querySelector("#code").value.trim()); }
+    catch (err) { btn.disabled = false; toast("Code ungültig oder abgelaufen. Fordere ein neues Mail an.", true); }
   };
 }
 function viewNoAccess() {
@@ -103,7 +115,7 @@ function viewDashboard() {
   const vis = showAll ? items : items.slice(0, 12);
   const n = next && dparts(next.date);
   V.innerHTML = `
-   ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? "Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden." : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
+   ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? `Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden. <a href="${location.origin + location.pathname}" class="demolink">Zur echten App mit Login →</a>` : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
    ${next ? `<button class="hero" data-open="${next.id}">
      <span class="k">Nächstes Training</span><span class="d">${n.full}</span>
      <span class="meta">${next.start}–${next.end} · ${PLACE[next.place]} · ${mins(next)} Min.<br>${esc(next.thema)}</span>

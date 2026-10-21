@@ -49,6 +49,11 @@ export async function sendLoginLink(email) {
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect } });
   if (error) throw error;
 }
+export async function verifyCode(email, token) {
+  const { data, error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+  if (error) throw error;
+  state.user = data.user; await load(); emit();
+}
 export async function signOut() { if (sb) await sb.auth.signOut(); state.user = null; emit(); }
 
 /* ================= Laden ================= */
