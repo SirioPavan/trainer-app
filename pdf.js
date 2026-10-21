@@ -79,7 +79,7 @@ async function render(pages, orient, name) {
   await Promise.all([...pages[0].ownerDocument.querySelectorAll(".pdfhost img")].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
   const [w] = SIZE[orient];
   const opt = { margin: 0, filename: name, image: { type: "jpeg", quality: 0.92 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: w, scrollX: 0, scrollY: 0 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
     jsPDF: { unit: "mm", format: "a4", orientation: orient }, pagebreak: { mode: [] } };
   let wk = window.html2pdf().set(opt).from(pages[0]).toPdf();
   for (const p of pages.slice(1)) wk = wk.get("pdf").then(pdf => pdf.addPage()).from(p).toContainer().toCanvas().toPdf();
