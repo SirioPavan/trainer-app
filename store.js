@@ -3,15 +3,19 @@
 //  - "demo":  nur auf diesem Gerät (localStorage), wenn config.js noch leer ist
 import { SEED } from "./seed-data.js";
 import { CONFIG } from "./config.js";
+import { generateSeries, themesFor } from "./plan.js";
 
-const TEAM = CONFIG.teamId || "e-junioren";
+let TEAM = CONFIG.teamId || "e-junioren";   // aktuelle Mannschaft – wird nach dem Login aus den Mitgliedschaften gewählt
+const TEAM_KEY = "fcs-trainer-team";
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD lokal
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.phase, name: e.name, page: e.page });
+const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.phase, name: e.name, page: e.page, levels: e.levels || null, team_id: e.team_id || null });
+// Übungen/Vorlagen der eigenen Stufe (G, F, E); eigene Übungen der Mannschaft immer. Ohne Stufe = E/F (bisherige Bibliothek)
+const forLevel = (x, lv) => x.team_id === TEAM || (x.levels?.length ? x.levels.includes(lv) : lv !== "G");
 
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
-  mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren" },
+  mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren", level: "E" }, teams: [],
   exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, leaders: {}, people: [], documents: [], docUrls: {}, links: []
 };
 
@@ -22,7 +26,8 @@ function emit() { listeners.forEach(fn => fn()); }
 
 /* ================= Start ================= */
 export async function init() {
-  const forceDemo = new URLSearchParams(location.search).has("demo");
+  const qs = new URLSearchParams(location.search), forceDemo = qs.has("demo");
+  if (forceDemo && /^g/i.test(qs.get("demo") || "")) TEAM = "g-junioren";
   state.forced = forceDemo;
   if (!forceDemo && CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase) {
     state.mode = "cloud";
@@ -84,14 +89,28 @@ export async function setPassword(password) {
   if (error) throw new Error(msgDe(error));
   state.recovery = false; emit();
 }
+export async function switchTeam(id) {
+  if (!state.teams.some(t => t.id === id)) return;
+  TEAM = id;
+  if (state.mode === "demo") { loadDemo(); emit(); return; }
+  try { localStorage.setItem(TEAM_KEY, id); } catch (e) {}
+  await load(); emit();
+}
 export async function signOut() { if (sb) await sb.auth.signOut(); state.user = null; emit(); }
 
 /* ================= Laden ================= */
 async function load() {
   if (!state.user) return;
   const from = new Date(Date.now() - 300 * 864e5).toLocaleDateString("sv-SE");   // ganze Saison
-  const [m, ex, tp, tr, tu, pl] = await Promise.all([
-    sb.from("team_members").select("role,display_name,team_id,teams(name)").eq("user_id", state.user.id),
+  // 1) Mitgliedschaften: welche Mannschaften darf diese Person sehen?
+  let m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level)").eq("user_id", state.user.id);
+  if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name)").eq("user_id", state.user.id);   // vor 11_mannschaften.sql
+  state.teams = (m.data || []).map(x => ({ id: x.team_id, name: x.teams?.name || x.team_id, level: x.teams?.level || "E", role: x.role, display_name: x.display_name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  let saved = null; try { saved = localStorage.getItem(TEAM_KEY); } catch (e) {}
+  const pick = state.teams.find(t => t.id === saved) || state.teams.find(t => t.id === TEAM) || state.teams[0];
+  if (pick) TEAM = pick.id;
+  const [ex, tp, tr, tu, pl] = await Promise.all([
     sb.from("exercises").select("*"),
     sb.from("templates").select("*"),
     sb.from("trainings").select("*").eq("team_id", TEAM).gte("date", from).order("date"),
@@ -100,12 +119,12 @@ async function load() {
   ]);
   const lk = await sb.from("exercise_links").select("*").eq("team_id", TEAM).order("created_at");
   state.links = lk.error ? [] : (lk.data || []);   // Tabelle erst ab 05_videos_sfv_karten.sql
-  const mine = (m.data || []).find(x => x.team_id === TEAM);
+  const mine = state.teams.find(x => x.id === TEAM);
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
-  if (mine?.teams?.name) state.team.name = mine.teams.name;
-  state.exercises = (ex.data || []).map(normEx);
-  state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) }));
+  state.team = mine ? { id: mine.id, name: mine.name, level: mine.level } : { id: TEAM, name: "", level: "E" };
+  state.exercises = (ex.data || []).map(normEx).filter(x => forLevel(x, state.team.level));
+  state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level));
   state.trainings = (tr.data || []).map(normT);
   state.tournaments = (tu.data || []).map(normU);
   state.players = pl.data || [];
@@ -174,6 +193,12 @@ function demoPlayers() {
       created_at: "2026-08-01T00:00:00" };
   });
 }
+function demoPlayersG() {
+  const names = ["Lio", "Mila", "Nael", "Ronja", "Tim", "Yara", "Elia", "Zoe", "Jan", "Nora"], last = ["Bühler", "Kunz", "Lang", "Moser", "Ott", "Roth", "Senn", "Vogt", "Wyss", "Egli"];
+  return names.map((n, i) => ({ id: "dg" + i, name: n + " " + last[i], first_name: n, last_name: last[i], year: 2020 + (i % 2), active: true,
+    birth_date: `${2020 + (i % 2)}-${String(2 + i).padStart(2, "0")}-1${i % 9}`, nds_id: String(9500001 + i), street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
+    guardian1_name: "Elternteil " + last[i], guardian1_phone: "+41 79 000 01 " + String(10 + i), guardian1_email: "eltern." + last[i].toLowerCase() + "@beispiel.ch", created_at: "2026-08-01T00:00:00" }));
+}
 function addDemoHistory(d) {
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   const kids = d.players.length ? d.players : demoPlayers();
@@ -185,9 +210,23 @@ function addDemoHistory(d) {
     d.attendance[id] = {}; kids.forEach((p, i) => d.attendance[id][p.id] = rnd() < (i === 5 ? 0.5 : i % 4 === 0 ? 0.7 : 0.88));
   }
 }
+// Vorführung mit zwei getrennten Mannschaften: E (Beispieldaten) und G (leer gestartet, Plan automatisch erzeugt)
+const DEMO_TEAMS = [{ id: "e-junioren", name: "E-Junioren", level: "E", role: "admin" }, { id: "g-junioren", name: "G-Junioren", level: "G", role: "admin" }];
+const demoKey = () => TEAM === "e-junioren" ? LS : LS + "-" + TEAM;
 function loadDemo() {
+  if (!DEMO_TEAMS.some(t => t.id === TEAM)) TEAM = "e-junioren";
+  const team = DEMO_TEAMS.find(t => t.id === TEAM);
+  state.team = { id: team.id, name: team.name, level: team.level }; state.teams = state.forced ? DEMO_TEAMS : [];
+  state.exercises = SEED.exercises.map(e => normEx({ ...e, team_id: null })).filter(x => forLevel(x, team.level));
+  state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time })).filter(x => forLevel(x, team.level));
   let d = null;
-  try { d = JSON.parse(localStorage.getItem(LS)); } catch (e) {}
+  try { d = JSON.parse(localStorage.getItem(demoKey())); } catch (e) {}
+  if (!d && team.level === "G") {
+    const from = today(), to = new Date(Date.now() + 70 * 864e5).toLocaleDateString("sv-SE");
+    d = { trainings: generateSeries({ from, to, slots: [{ wd: 3, start: "16:30", end: "17:30", place: "hall" }, { wd: 6, start: "09:00", end: "10:00", place: "hall" }],
+            themes: themesFor("G"), exercises: state.exercises }).map(t => ({ ...t, id: uid() })),
+          tournaments: [], players: state.forced ? demoPlayersG() : [], attendance: {}, people: [] };
+  }
   if (!d) {
     d = {
       trainings: SEED.trainings.map(t => ({ ...t, id: uid(), template_id: t.template_id })),
@@ -200,9 +239,7 @@ function loadDemo() {
   if (!d.people?.length || !d.people[0].user_id) d.people = [
     { user_id: "demo-u1", email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false, nds_id: "9100001" },
     { user_id: "demo-u2", email: "assistenz@verein.ch", role: "trainer", display_name: "Assistenz (Demo)", pending: false, nds_id: "" }];
-  if (state.forced && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
-  state.exercises = SEED.exercises.map(normEx);
-  state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time }));
+  if (state.forced && team.level === "E" && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
   state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.role = "admin"; state.links = d.links || [];
@@ -210,14 +247,14 @@ function loadDemo() {
 }
 function saveDemo() {
   try {
-    localStorage.setItem(LS, JSON.stringify({
+    localStorage.setItem(demoKey(), JSON.stringify({
       trainings: state.trainings, players: state.players, attendance: state.attendance,
       people: state.people, links: state.links, leaders: state.leaders,
       tournaments: state.tournaments.map(u => ({ ...u, time_text: u.time, organizer: u.org, category: u.cat }))
     }));
   } catch (e) {}
 }
-export function resetDemo() { try { localStorage.removeItem(LS); } catch (e) {} loadDemo(); emit(); }
+export function resetDemo() { try { localStorage.removeItem(demoKey()); } catch (e) {} loadDemo(); emit(); }
 
 /* ================= Schreiben ================= */
 async function run(q) { const { error } = await q; if (error) throw error; }
@@ -259,7 +296,9 @@ export async function swapExercise(trainingId, idx, exId) {
 export async function saveNote(trainingId, note) {
   const t = state.trainings.find(x => x.id === trainingId); t.note = note;
   if (state.mode === "demo") return saveDemo();
-  await run(sb.from("trainings").update({ note }).eq("id", trainingId));
+  // über eine Funktion, damit auch Assistenztrainer (ohne Planungsrechte) Notizen schreiben können
+  const r = await sb.rpc("set_training_note", { tid: trainingId, txt: note });
+  if (r.error) await run(sb.from("trainings").update({ note }).eq("id", trainingId));   // vor 13_rollen_planung.sql
 }
 export async function addTraining(date, templateId) {
   const tp = state.templates.find(t => t.id === templateId);
@@ -273,6 +312,35 @@ export async function deleteTraining(id) {
   state.trainings = state.trainings.filter(t => t.id !== id); delete state.attendance[id]; delete state.leaders[id];
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("trainings").delete().eq("id", id));
+}
+
+// Mehrere Trainings auf einmal anlegen (Planungs-Assistent)
+export async function addTrainings(rows) {
+  const full = rows.map(r => ({ team_id: TEAM, ...r }));
+  if (state.mode === "demo") { full.forEach(r => state.trainings.push(normT({ ...r, id: uid() }))); return saveDemo(); }
+  for (let i = 0; i < full.length; i += 100) {
+    const { data, error } = await sb.from("trainings").insert(full.slice(i, i + 100)).select(); if (error) throw error;
+    (data || []).forEach(d => state.trainings.push(normT(d)));
+  }
+}
+// Ein Training ändern: Datum, Zeit, Ort, Thema … oder Blöcke
+export async function updateTraining(id, patch) {
+  const t = state.trainings.find(x => x.id === id); if (!t) return;
+  Object.assign(t, patch, normT({ ...t, ...patch }));
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.from("trainings").update(patch).eq("id", id));
+}
+// Mehrere Trainings gleich ändern (z. B. neue Zeit für alle Mittwoche)
+export async function updateTrainings(ids, patch) {
+  ids.forEach(id => { const t = state.trainings.find(x => x.id === id); if (t) Object.assign(t, patch, normT({ ...t, ...patch })); });
+  if (state.mode === "demo") return saveDemo();
+  for (let i = 0; i < ids.length; i += 100) await run(sb.from("trainings").update(patch).in("id", ids.slice(i, i + 100)));
+}
+export async function deleteTrainings(ids) {
+  const set = new Set(ids);
+  state.trainings = state.trainings.filter(t => !set.has(t.id)); ids.forEach(id => { delete state.attendance[id]; delete state.leaders[id]; });
+  if (state.mode === "demo") return saveDemo();
+  for (let i = 0; i < ids.length; i += 100) await run(sb.from("trainings").delete().in("id", ids.slice(i, i + 100)));
 }
 
 export async function addPlayer(name, year, nds_id) {
@@ -396,6 +464,63 @@ export async function addTournament(u) {
   if (state.mode === "demo") { state.tournaments.push(normU({ ...row, id: uid() })); return saveDemo(); }
   const { data, error } = await sb.from("tournaments").insert(row).select().single(); if (error) throw error;
   state.tournaments.push(normU(data));
+}
+// Turnierliste aus Excel (kopieren und einfügen) oder CSV lesen. Spalten werden an der Kopfzeile erkannt.
+const MON = { jan: 1, feb: 2, mär: 3, mar: 3, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
+export function parseDate(v) {
+  v = String(v || "").trim(); let m;
+  if ((m = v.match(/(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  if ((m = v.match(/(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{2,4})/))) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; }
+  if ((m = v.match(/(\d{1,2})\.?\s+([A-Za-zÄäÖöÜü]{3})[a-zäöü]*\.?\s+(\d{4})/)) && MON[m[2].toLowerCase()]) return `${m[3]}-${String(MON[m[2].toLowerCase()]).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  if (/^\d{5}(\.\d+)?$/.test(v) && +v > 40000 && +v < 60000) return new Date(Date.UTC(1899, 11, 30) + Math.floor(+v) * 864e5).toISOString().slice(0, 10);   // Excel-Datumszahl
+  return null;
+}
+const normStatus = v => /einget/i.test(v) ? "eingeteilt" : /warte/i.test(v) ? "Warteliste" : /abges|absage/i.test(v) ? "abgesagt" : "angemeldet";
+export function parseTournaments(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n").filter(l => l.trim());
+  if (!lines.length) return [];
+  const sep = lines[0].includes("\t") ? "\t" : (lines[0].split(";").length > lines[0].split(",").length ? ";" : ",");
+  const rows = lines.map(l => sep === "\t" ? l.split("\t") : parseCsv(l, sep)[0] || []).map(r => r.map(c => String(c ?? "").trim()));
+  const H = { date: /datum|date|^tag$/i, time: /zeit|uhr|beginn|time/i, name: /turnier|name|bezeichnung|anlass|event|wettbewerb/i, place: /^ort$|spielort|platz|anlage|ort\b|halle/i,
+    org: /veranstalt|organisat|verein|club/i, cat: /kat|stärke|klasse|gruppe|kategorie/i, status: /status|anmeldung/i };
+  const head = rows[0], hasHead = head.some(c => H.date.test(c)) && !head.some(c => parseDate(c));
+  const col = {};
+  if (hasHead) for (const [k, re] of Object.entries(H)) { const i = head.findIndex((c, j) => re.test(c) && !Object.values(col).includes(j)); if (i >= 0) col[k] = i; }
+  const out = [];
+  for (const r of hasHead ? rows.slice(1) : rows) {
+    let date = col.date != null ? parseDate(r[col.date]) : null;
+    if (!date) { const j = r.findIndex(c => parseDate(c)); if (j < 0) continue; date = parseDate(r[j]); if (col.date == null) col._d = j; }
+    const pick = k => col[k] != null ? r[col[k]] || "" : "";
+    let name = pick("name"), time = pick("time"), place = pick("place");
+    if (!hasHead) {   // ohne Kopfzeile: Zeit erkennen, längster Text = Name, nächster = Ort
+      const rest = r.filter((c, j) => j !== col._d && c);
+      time = rest.find(c => /^\d{1,2}[:.]\d{2}/.test(c)) || "";
+      const txt = rest.filter(c => c !== time && !parseDate(c)).sort((a, b) => b.length - a.length);
+      name = txt[0] || ""; place = txt[1] || "";
+    }
+    if (!name) continue;
+    out.push({ date, time: time.replace(/(\d)\.(\d\d)/g, "$1:$2"), name, place, org: pick("org"), cat: pick("cat"), status: normStatus(pick("status")) });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+// Turniere einlesen (Liste aus Excel/CSV) – Duplikate (gleiches Datum + Name) werden übersprungen
+export async function importTournaments(list) {
+  const key = u => u.date + "|" + u.name.trim().toLowerCase();
+  const have = new Set(state.tournaments.map(key));
+  const rows = list.filter(u => !have.has(key(u))).map(u => ({ team_id: TEAM, date: u.date, name: u.name, place: u.place || "Ort offen",
+    organizer: u.org || null, category: u.cat || null, status: u.status || "angemeldet", time_text: u.time || null }));
+  if (rows.length) {
+    if (state.mode === "demo") rows.forEach(r => state.tournaments.push(normU({ ...r, id: uid() })));
+    else { const { data, error } = await sb.from("tournaments").insert(rows).select(); if (error) throw error; (data || []).forEach(d => state.tournaments.push(normU(d))); }
+  }
+  if (state.mode === "demo") saveDemo();
+  return { added: rows.length, skipped: list.length - rows.length };
+}
+export async function updateTournament(id, u) {
+  const patch = { date: u.date, name: u.name, place: u.place || "Ort offen", time_text: u.time || null, organizer: u.org || null, category: u.cat || null };
+  const t = state.tournaments.find(x => x.id === id); Object.assign(t, normU({ ...t, ...patch }));
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.from("tournaments").update(patch).eq("id", id));
 }
 export async function setTournamentStatus(id, status) {
   state.tournaments.find(u => u.id === id).status = status;

@@ -4,6 +4,7 @@ import { state } from "./store.js";
 import { PH, drawDiagram } from "./diagram.js";
 import { WHEEL_VAR, WHEEL_MOT } from "./wissen.js";
 import * as pdf from "./pdf.js";
+import { generateSeries, themesFor, minutesBetween, splitMinutes, WDN } from "./plan.js";
 
 const PLACE = { grass: "Rasen", hall: "Halle" };
 const ST = { eingeteilt: "ok", angemeldet: "ok", Warteliste: "wait", abgesagt: "open" };
@@ -61,7 +62,11 @@ function render(keepScroll) {
   const nav = document.querySelector(".nav"), top = document.querySelector(".top");
   document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isAdmin() ? "Admin" : "Trainer");
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
-  document.getElementById("teamName").textContent = state.team.name;
+  const tn = document.getElementById("teamName");
+  if (state.teams?.length > 1 && state.user) {
+    tn.innerHTML = `<select class="teamsel" aria-label="Mannschaft wechseln">${state.teams.map(t => `<option value="${t.id}" ${t.id === state.team.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`;
+    tn.firstChild.onchange = e => { route = { tab: "trainings" }; history.replaceState(route, ""); db.switchTeam(e.target.value); };
+  } else tn.textContent = state.team.name;
   if (!state.user) { nav.hidden = true; top.classList.add("bare"); viewLogin(); return; }
   if (state.recovery) { nav.hidden = true; viewSetPassword(); return; }
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
@@ -146,7 +151,7 @@ function viewDashboard() {
    ${next ? `<button class="hero" data-open="${next.id}">
      <span class="k">Nächstes Training</span><span class="d">${n.full}</span>
      <span class="meta">${next.start}–${next.end} · ${PLACE[next.place]} · ${mins(next)} Min.<br>${esc(next.thema)}</span>
-     <span class="go">Training öffnen</span></button>` : `<p class="card pad empty">Keine kommenden Trainings. Lege unten eines aus einer Vorlage an.</p>`}
+     <span class="go">Training öffnen</span></button>` : `<p class="card pad empty">Noch keine kommenden Trainings. Unten bei «+ Trainings planen» legst du die ganze Serie auf einmal an.</p>`}
    ${nt ? `<button class="card pad tourcard" data-tab-go="turniere"><span class="k">Nächstes Turnier</span>
      <b>${dparts(nt.date).full}${nt.time ? " · " + esc(nt.time) : ""}</b>
      <span class="muted small">${esc(nt.place)}${nt.org ? " · Veranstalter: " + esc(nt.org) : ""}</span></button>` : ""}
@@ -156,18 +161,137 @@ function viewDashboard() {
      ${[["all", "Alles"], ["train", "Trainings"], ["tour", "Turniere"]].map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filt === k}">${l}</button>`).join("")}</div>
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
-   <details class="card pad addbox"><summary class="lbl">+ Training hinzufügen</summary>
-     <form class="inline" id="addt" style="margin-top:10px">
-       <input id="tdate" type="date" required aria-label="Datum" min="${td}">
-       <select id="ttpl" aria-label="Vorlage">${state.templates.map(t => `<option value="${t.id}">${esc(t.title)} (${t.start}–${t.end})</option>`).join("")}</select>
-       <button class="btn">Anlegen</button></form></details>`;
+   ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   const mb = V.querySelector("[data-more]"); if (mb) mb.onclick = () => { showAll = !showAll; render(true); };
   V.querySelector("[data-planpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.planPdf());
-  V.querySelector("#addt").onsubmit = e => { e.preventDefault(); act(() => db.addTraining(V.querySelector("#tdate").value, V.querySelector("#ttpl").value), "Training angelegt"); };
+  if (isAdmin()) bindPlanBox();
 }
+/* ================= Trainingsplanung in der App ================= */
+let planMode = "serie", planArmed = null, planMsg = "", planOpen = null, planVals = null, planPending = null;
+const HOL_KEY = () => "fcs-hol-" + state.team.id;
+const DEF_HOL = [["2026-12-19", "2027-01-03"], ["2027-02-06", "2027-02-21"], ["", ""], ["", ""]];
+function loadHol() { try { const h = JSON.parse(localStorage.getItem(HOL_KEY())); if (Array.isArray(h)) return h; } catch (e) {} return DEF_HOL; }
+// bisherige Trainingszeiten als Vorschlag: häufigste Kombination pro Wochentag
+function guessSlots() {
+  const c = {};
+  state.trainings.slice(-40).forEach(t => { const k = new Date(t.date + "T12:00:00").getDay() + "|" + t.start + "|" + t.end + "|" + t.place; c[k] = (c[k] || 0) + 1; });
+  const best = {};
+  Object.entries(c).sort((a, b) => b[1] - a[1]).forEach(([k]) => { const [wd, start, end, place] = k.split("|"); if (!best[wd]) best[wd] = { wd, start, end, place }; });
+  const list = Object.values(best).sort((a, b) => ((+a.wd + 6) % 7) - ((+b.wd + 6) % 7));
+  return list.length ? list : [{ wd: "3", start: "17:00", end: "18:15", place: "hall" }];
+}
+const wdSel = (name, v) => `<select name="${name}" aria-label="Wochentag"><option value="">–</option>${[1, 2, 3, 4, 5, 6, 0].map(i => `<option value="${i}" ${String(v) === String(i) ? "selected" : ""}>${WDN[i]}</option>`).join("")}</select>`;
+const plSel = (name, v) => `<select name="${name}" aria-label="Ort"><option value="hall" ${v === "hall" ? "selected" : ""}>Halle</option><option value="grass" ${v === "grass" ? "selected" : ""}>Rasen</option></select>`;
+function planBox(td) {
+  const slots = guessSlots(), hol = loadHol(), themes = themesFor(state.team.level);
+  const to = new Date(Date.now() + 120 * 864e5).toLocaleDateString("sv-SE");
+  const V0 = planVals, val = (k, d) => V0 ? (V0[k] ?? "") : d, on = (k, d) => V0 ? k in V0 : d;
+  const fut = state.trainings.filter(t => t.date >= td);
+  const wds = [...new Set(fut.map(t => new Date(t.date + "T12:00:00").getDay()))].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  const tabs = [["serie", "Serie planen"], ["edit", "Zeiten ändern"], ["one", "Einzeltraining"]];
+  return `<details class="card pad addbox" id="planbox" ${(planOpen ?? !fut.length) || planArmed ? "open" : ""}><summary class="lbl">+ Trainings planen</summary>
+    <div class="seg" role="tablist" style="margin-top:10px">${tabs.map(([k, l]) => `<button role="tab" data-pm="${k}" aria-selected="${planMode === k}">${l}</button>`).join("")}</div>
+    ${planMode === "serie" ? `<form id="pserie" class="stack planf">
+      <p class="small muted">Legt alle Trainings im Zeitraum an, nach J+S-Aufbau, mit wechselnden Themen und abwechselnden Übungen. Einzelne Übungen kannst du danach im Training tauschen.</p>
+      <span class="lbl">Zeitraum</span><div class="frow"><input type="date" name="from" value="${val("from", td)}" required aria-label="Von"><input type="date" name="to" value="${val("to", to)}" required aria-label="Bis"></div>
+      <span class="lbl">Trainingstage</span>
+      ${[0, 1, 2].map(i => { const sl = slots[i] || {}; return `<div class="frow slot">${wdSel("wd" + i, val("wd" + i, sl.wd ?? ""))}<input type="time" name="s${i}" value="${val("s" + i, sl.start || "17:00")}" aria-label="Beginn"><input type="time" name="e${i}" value="${val("e" + i, sl.end || "18:15")}" aria-label="Ende">${plSel("p" + i, val("p" + i, sl.place || "hall"))}</div>`; }).join("")}
+      <span class="lbl">Ferien / trainingsfrei</span>
+      ${hol.map((h, i) => `<div class="frow"><input type="date" name="ha${i}" value="${val("ha" + i, h[0] || "")}" aria-label="Ferien von"><input type="date" name="hb${i}" value="${val("hb" + i, h[1] || "")}" aria-label="Ferien bis"></div>`).join("")}
+      <label class="chk"><input type="checkbox" name="skipT" ${on("skipT", true) ? "checked" : ""}> Kein Training an Tagen mit Turnier (eingeteilt/angemeldet)</label>
+      <span class="lbl">Bestehende Trainings im Zeitraum</span>
+      <label class="chk"><input type="radio" name="mode" value="keep" ${val("mode", "keep") !== "replace" ? "checked" : ""}> behalten, nur Lücken füllen</label>
+      <label class="chk"><input type="radio" name="mode" value="replace" ${val("mode", "keep") === "replace" ? "checked" : ""}> ersetzen (Trainings mit erfasster Anwesenheit bleiben)</label>
+      <details class="more"><summary>Themen (${themes.length})</summary>${themes.map((t, i) => `<label class="chk"><input type="checkbox" name="th${i}" ${on("th" + i, true) ? "checked" : ""}> ${esc(t.name)}</label>`).join("")}</details>
+      <button class="btn">${planArmed ? esc(planArmed) : "Vorschau"}</button>
+    </form>` : ""}
+    ${planMode === "edit" ? (fut.length ? `<form id="pedit" class="stack planf">
+      <p class="small muted">Ändert Zeit und Ort aller kommenden Trainings an einem Wochentag, z. B. wenn die Halle neu erst um 17.30 frei ist.</p>
+      <div class="frow"><select name="wd" aria-label="Wochentag">${wds.map(i => `<option value="${i}">alle ${WDN[i]}e</option>`).join("")}</select><input type="date" name="from" value="${td}" aria-label="ab Datum"></div>
+      <div class="frow"><input type="time" name="s" aria-label="Neuer Beginn"><input type="time" name="e" aria-label="Neues Ende"><select name="p" aria-label="Ort"><option value="">Ort unverändert</option><option value="hall">Halle</option><option value="grass">Rasen</option></select></div>
+      <p class="small muted">Leere Zeitfelder bleiben unverändert. Die Minuten der Übungen werden an die neue Dauer angepasst.</p>
+      <div class="btnrow"><button class="btn" data-pe="upd">Ändern</button><button class="btn ghost danger" data-pe="del">${planArmed === "del" ? "Wirklich löschen? Nochmals tippen" : "Diese Trainings löschen"}</button></div>
+    </form>` : `<p class="small muted" style="margin-top:10px">Keine kommenden Trainings.</p>`) : ""}
+    ${planMode === "one" ? `<form class="inline" id="addt" style="margin-top:10px">
+       <input id="tdate" type="date" required aria-label="Datum" min="${td}">
+       <select id="ttpl" aria-label="Vorlage">${state.templates.map(t => `<option value="${t.id}">${esc(t.title)} (${t.start}–${t.end})</option>`).join("")}</select>
+       <button class="btn">Anlegen</button></form>` : ""}
+    ${planMsg ? `<p class="small planmsg">${planMsg}</p>` : ""}
+  </details>`;
+}
+function readSerie(f) {
+  const slots = [0, 1, 2].map(i => ({ wd: f["wd" + i].value, start: f["s" + i].value, end: f["e" + i].value, place: f["p" + i].value }))
+    .filter(x => x.wd !== "" && x.start && x.end && minutesBetween(x.start, x.end) >= 30);
+  const holidays = [...f.querySelectorAll("[name^=ha]")].map((x, i) => [x.value, f["hb" + i].value]);
+  const all = themesFor(state.team.level), themes = all.filter((t, i) => f["th" + i]?.checked);
+  return { from: f.from.value, to: f.to.value, slots, holidays, themes: themes.length ? themes : all, skipT: f.skipT.checked, replace: f.mode.value === "replace" };
+}
+function planSerie(o) {
+  const hasAtt = id => Object.values(state.attendance[id] || {}).some(Boolean);
+  const inRange = state.trainings.filter(t => t.date >= o.from && t.date <= o.to && t.date >= db.today());
+  const remove = o.replace ? inRange.filter(t => !hasAtt(t.id)) : [];
+  const keep = state.trainings.filter(t => !remove.includes(t));
+  const skip = new Set(o.skipT ? state.tournaments.filter(u => ["eingeteilt", "angemeldet"].includes(u.status)).map(u => u.date) : []);
+  const rows = generateSeries({ from: o.from, to: o.to, slots: o.slots, holidays: o.holidays, skip, themes: o.themes, exercises: state.exercises })
+    .filter(r => r.date >= db.today() && !keep.some(t => t.date === r.date && t.start === r.start_time));
+  return { rows, remove };
+}
+function bindPlanBox() {
+  const pb = V.querySelector("#planbox"); if (pb) pb.ontoggle = () => { planOpen = pb.open; };
+  V.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { planMode = b.dataset.pm; planArmed = null; planPending = null; planMsg = ""; render(true); });
+  const fs = V.querySelector("#pserie");
+  if (fs) {
+    fs.oninput = () => { planVals = Object.fromEntries(new FormData(fs)); if (planArmed) { planArmed = null; planPending = null; fs.querySelector("button.btn").textContent = "Vorschau"; } };
+    fs.onsubmit = e => {
+      e.preventDefault();
+      const o = readSerie(fs);
+      if (!o.slots.length) { toast("Bitte mindestens einen Trainingstag mit Zeiten angeben", true); return; }
+      if (o.to < o.from) { toast("«Bis» liegt vor «Von»", true); return; }
+      try { localStorage.setItem(HOL_KEY(), JSON.stringify(o.holidays)); } catch (x) {}
+      planVals = Object.fromEntries(new FormData(fs));
+      const p = planArmed && planPending ? planPending : planSerie(o);
+      if (!planArmed) {
+        planPending = p;
+        if (!p.rows.length) { planMsg = "Keine neuen Trainings: Im Zeitraum ist schon alles geplant (oder nur Ferien/Turniertage)."; render(true); return; }
+        const d = r => r.date.split("-").reverse().slice(0, 2).join(".");
+        planArmed = `${p.rows.length} Trainings anlegen${p.remove.length ? `, ${p.remove.length} ersetzen` : ""} – bestätigen`;
+        planMsg = `Vorschau: ${p.rows.length} Trainings vom ${d(p.rows[0])} bis ${d(p.rows[p.rows.length - 1])}. Themen im Wechsel: ${[...new Set(p.rows.map(r => r.thema))].map(esc).join(" · ")}.`;
+        render(true); return;
+      }
+      planArmed = null; planPending = null; planVals = null;
+      act(async () => { if (p.remove.length) await db.deleteTrainings(p.remove.map(t => t.id)); await db.addTrainings(p.rows); planMsg = `${p.rows.length} Trainings angelegt.`; }, p.rows.length + " Trainings angelegt");
+    };
+  }
+  const fe = V.querySelector("#pedit");
+  if (fe) fe.onsubmit = e => {
+    e.preventDefault();
+    const kind = e.submitter?.dataset.pe || "upd", wd = +fe.wd.value, from = fe.from.value;
+    const hasAtt = id => Object.values(state.attendance[id] || {}).some(Boolean);
+    const list = state.trainings.filter(t => t.date >= from && t.date >= db.today() && new Date(t.date + "T12:00:00").getDay() === wd);
+    if (!list.length) { toast("Keine passenden Trainings", true); return; }
+    if (kind === "del") {
+      if (planArmed !== "del") { planArmed = "del"; render(true); return; }
+      planArmed = null;
+      const del = list.filter(t => !hasAtt(t.id));
+      act(() => db.deleteTrainings(del.map(t => t.id)), `${del.length} Trainings gelöscht` + (del.length < list.length ? ` (${list.length - del.length} mit Anwesenheit behalten)` : ""));
+      return;
+    }
+    const s = fe.s.value, en = fe.e.value, pl = fe.p.value;
+    act(async () => {
+      for (const t of list) {
+        const start = s || t.start, end = en || t.end, patch = { start_time: start, end_time: end, place: pl || t.place };
+        if (minutesBetween(start, end) !== minutesBetween(t.start, t.end)) { const m = splitMinutes(minutesBetween(start, end)); if (t.blocks.length === 7) patch.blocks = t.blocks.map((b, i) => ({ ...b, min: m[i] })); }
+        await db.updateTraining(t.id, patch);
+      }
+    }, `${list.length} Trainings geändert`);
+  };
+  const ft = V.querySelector("#addt");
+  if (ft) ft.onsubmit = e => { e.preventDefault(); act(() => db.addTraining(V.querySelector("#tdate").value, V.querySelector("#ttpl").value), "Training angelegt"); };
+}
+
 function rowT(t) {
   const d = dparts(t.date), c = attCount(t), n = activePlayers().length, clash = state.tournaments.filter(u => u.date === t.date && u.status !== "abgesagt");
   return `<button class="row" data-open="${t.id}">
@@ -209,7 +333,13 @@ function bindVideos() {
 }
 function exCard(e, idx, t, surface) {
   if (!e) return `<p class="card pad empty">Übung nicht gefunden.</p>`;
-  const others = t ? state.exercises.filter(x => x.ph === e.ph && x.id !== e.id) : [];
+  // Tauschen: zuerst alle Übungen der Phase dieses Blocks (passender Untergrund zuerst), danach alle übrigen Phasen
+  const bph = t ? (t.blocks[idx]?.ph || e.ph) : e.ph;
+  const sortEx = arr => arr.slice().sort((x, y) => (x.place !== t.place) - (y.place !== t.place) || x.name.localeCompare(y.name, "de"));
+  const swapOpts = !t ? "" : ["auf", "ein", "sp", "le", "vi", "aus"].sort((x, y) => (x !== bph) - (y !== bph)).map(ph => {
+    const list = sortEx(state.exercises.filter(x => x.ph === ph));
+    return list.length ? `<optgroup label="${PH[ph].t.replace("Hauptteil · ", "")}${ph === bph ? " (diese Phase)" : ""}">${list.map(o => `<option value="${o.id}" ${o.id === e.id ? "selected" : ""}>${esc(o.name)} · ${PLACE[o.place]}</option>`).join("")}</optgroup>` : "";
+  }).join("");
   return `<article class="card ex">${e.d ? drawDiagram(surface ? { ...e.d, s: surface } : e.d) : ""}
     <div class="body">
       <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</div>
@@ -220,11 +350,12 @@ function exCard(e, idx, t, surface) {
       ${e.coach?.length ? `<div><span class="lbl">Coaching:</span><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
       ${e.var ? `<p class="var"><span class="lbl">Rad der Variation:</span> ${esc(e.var)}</p>` : ""}
       ${videoBlock(e)}
-      ${t && others.length ? `<div class="swap"><label for="sw${idx}" class="muted">Übung tauschen:</label>
-        <select id="sw${idx}" data-swap="${idx}"><option value="">– andere Übung derselben Phase –</option>${others.map(o => `<option value="${o.id}">${esc(o.name)} (${PLACE[o.place]})</option>`).join("")}</select></div>` : ""}
+      ${t && isAdmin() ? `<div class="swap"><label for="sw${idx}" class="muted">Übung tauschen:</label>
+        <select id="sw${idx}" data-swap="${idx}" data-cur="${e.id}">${swapOpts}</select></div>` : ""}
     </div></article>`;
 }
 const attOpen = {};
+let editT = null;
 /* Anwesenheit (Kinder + Leiter/innen) – für Trainings und Turniere gleich */
 function attSection(id) {
   const a = state.attendance[id] || {}, ap = activePlayers(), c = attCount({ id }), n = ap.length;
@@ -254,7 +385,17 @@ function viewTraining(id) {
   const d = isTpl ? { full: "Vorlage" } : dparts(t.date), total = mins(t), a = state.attendance[t.id] || {}, ap = activePlayers(), c = attCount(t), n = ap.length;
   const used = [...new Set(t.blocks.map(b => b.ph))];
   V.innerHTML = `
-   <div class="sec-head"><button class="back" data-back>‹ ${isTpl ? "Trainingsvorlagen" : "Planung"}</button><button class="btn ghost pdfbtn" data-trpdf>${PDF_ICON}Als PDF</button></div>
+   <div class="sec-head"><button class="back" data-back>‹ ${isTpl ? "Trainingsvorlagen" : "Planung"}</button><span class="btnrow tight">${isTpl || !isAdmin() ? "" : `<button class="btn ghost pdfbtn" data-tredit>${editT === t.id ? "Schliessen" : "Bearbeiten"}</button>`}<button class="btn ghost pdfbtn" data-trpdf>${PDF_ICON}Als PDF</button></span></div>
+   ${!isTpl && editT === t.id ? `<form class="card pad stack planf" id="tredit">
+     <div class="frow"><input type="date" name="date" value="${t.date}" required aria-label="Datum"><input type="time" name="s" value="${t.start}" required aria-label="Beginn"><input type="time" name="e" value="${t.end}" required aria-label="Ende">${plSel("p", t.place)}</div>
+     <label class="lbl">Thema<input name="thema" value="${esc(t.thema)}"></label>
+     <label class="lbl">Ziel<textarea name="ziel" rows="2">${esc(t.ziel)}</textarea></label>
+     <label class="lbl">Fragen<textarea name="fragen" rows="2">${esc(t.fragen)}</textarea></label>
+     <label class="lbl">Material<textarea name="material" rows="2">${esc(t.material)}</textarea></label>
+     <span class="lbl">Minuten pro Block</span>
+     <div class="minrow">${t.blocks.map((b, i) => `<label><span>${PH[b.ph].t.replace("Hauptteil · ", "").replace("Fussball spielen lernen", "Lernen").replace("Fussball spielen", "Spielen").replace("Vielseitigkeit erleben", "Vielseitigk.")}</span><input type="number" min="0" max="60" name="m${i}" value="${b.min}"></label>`).join("")}</div>
+     <p class="small muted">Wird die Zeit geändert und die Minuten nicht, passt die App die Minuten automatisch an.</p>
+     <button class="btn">Speichern</button></form>` : ""}
    <section class="dhead">
      <h2>${isTpl ? esc(t.title) : d.full}</h2>
      <div><span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> <span class="muted small">${t.start}–${t.end} · ${total} Min.</span></div>
@@ -267,15 +408,27 @@ function viewTraining(id) {
    <section class="card pad stack"><label for="note" class="lbl">Notiz zum Training</label>
      <textarea id="note" rows="2" placeholder="z. B. Halle B statt A, Bälle mitnehmen">${esc(t.note || "")}</textarea></section>`}
    ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t, t.place === "hall" ? "hall" : "grass")}</section>`).join("")}
-   ${isTpl ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
+   ${isTpl || !isAdmin() ? "" : `<button class="btn ghost danger" data-deltr>Training absagen und löschen</button>`}`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: isTpl ? "uebungen" : "trainings" });
+  const eb = V.querySelector("[data-tredit]"); if (eb) eb.onclick = () => { editT = editT === t.id ? null : t.id; render(true); };
+  const ef = V.querySelector("#tredit");
+  if (ef) ef.onsubmit = e => {
+    e.preventDefault();
+    const start = ef.s.value, end = ef.e.value, dur = minutesBetween(start, end);
+    if (dur < 20) { toast("Ende muss nach dem Beginn liegen", true); return; }
+    let blocks = t.blocks.map((b, i) => ({ ...b, min: Math.max(0, +ef["m" + i].value || 0) }));
+    const minsChanged = blocks.some((b, i) => b.min !== t.blocks[i].min);
+    if (!minsChanged && dur !== mins(t) && blocks.length === 7) { const m = splitMinutes(dur); blocks = blocks.map((b, i) => ({ ...b, min: m[i] })); }
+    editT = null;
+    act(() => db.updateTraining(t.id, { date: ef.date.value, start_time: start, end_time: end, place: ef.p.value, thema: ef.thema.value.trim(), ziel: ef.ziel.value.trim(), fragen: ef.fragen.value.trim(), material: ef.material.value.trim(), blocks }), "Training gespeichert");
+  };
   V.querySelector("[data-trpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.trainingPdf(t, isTpl));
   bindVideos();
   if (isTpl) return;
   bindAtt();
-  V.querySelectorAll("[data-swap]").forEach(s => s.onchange = () => s.value && act(() => db.swapExercise(t.id, +s.dataset.swap, s.value), "Übung getauscht"));
+  V.querySelectorAll("[data-swap]").forEach(s => s.onchange = () => s.value && s.value !== s.dataset.cur && act(() => db.swapExercise(t.id, +s.dataset.swap, s.value), "Übung getauscht"));
   const note = V.querySelector("#note"); note.onchange = () => act(() => db.saveNote(t.id, note.value), "Notiz gespeichert");
-  const del = V.querySelector("[data-deltr]");
+  const del = V.querySelector("[data-deltr]"); if (!del) return;
   del.onclick = () => {
     if (del.dataset.armed) { act(() => db.deleteTraining(t.id), "Training gelöscht").then(() => go({ tab: "trainings" })); }
     else { del.dataset.armed = 1; del.textContent = "Wirklich löschen? Nochmals tippen"; setTimeout(() => { delete del.dataset.armed; del.textContent = "Training absagen und löschen"; }, 4000); }
@@ -285,7 +438,7 @@ function viewTraining(id) {
 /* ================= Übungen ================= */
 let q = "", fph = "all", fpl = "all", libMode = "ex";
 function viewTemplates() {
-  const groups = [["Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
+  const groups = [[state.team.level === "G" ? "Vorlagen G-Junioren" : "Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
   return groups.filter(g => g[1].length).map(([g, list]) => `<div class="sec-head"><h3>${esc(g)}</h3><span class="note">${list.length}</span></div>
     <div class="card list">${list.map(tp => `<button class="row" data-tpl="${tp.id}" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(tp.title)}</b><span>${esc(tp.thema)} · ${mins(tp)}' · ${tp.blocks.length} Übungen</span></span><span class="chev">›</span></button>`).join("")}</div>`).join("")
@@ -523,15 +676,22 @@ function viewKader() {
 }
 
 /* ================= Turniere ================= */
-let tOpen = null;
+let tOpen = null, tEdit = null, tImp = null;
 function tourRow(u) {
   const d = dparts(u.date), c = attCount(u), open = tOpen === u.id;
   return `<div class="row turn static">
       <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m} ${String(d.y).slice(2)}</span></span>
       <span class="mid"><b>${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${u.org || u.cat ? `<span>${[u.org && "Veranstalter: " + esc(u.org), esc(u.cat || "")].filter(Boolean).join(" · ")}</span>` : ""}
         ${u.status !== "abgesagt" ? `<button class="linkbtn tattbtn" data-topen="${u.id}">${open ? "Anwesenheit schliessen" : c ? `Anwesenheit: ${c} Kinder` : "Anwesenheit erfassen"}</button>` : ""}</span>
-      <span class="stackr"><select class="stsel" data-st="${u.id}" aria-label="Status">${["eingeteilt", "angemeldet", "Warteliste", "abgesagt"].map(s => `<option ${s === u.status ? "selected" : ""}>${s}</option>`).join("")}</select>
-        <button class="linkbtn" data-del="${u.id}">Löschen</button></span></div>
+      <span class="stackr">${isAdmin() ? `<select class="stsel" data-st="${u.id}" aria-label="Status">${["eingeteilt", "angemeldet", "Warteliste", "abgesagt"].map(s => `<option ${s === u.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+        <button class="linkbtn" data-tedit="${u.id}">${tEdit === u.id ? "Schliessen" : "Bearbeiten"}</button>
+        <button class="linkbtn" data-del="${u.id}">Löschen</button>` : `<span class="pill ${ST[u.status] || "open"}">${esc(u.status)}</span>`}</span></div>
+      ${tEdit === u.id ? `<form class="planf stack tatt" data-tsave="${u.id}">
+        <input name="name" value="${esc(u.name)}" required aria-label="Name">
+        <div class="frow"><input type="date" name="date" value="${u.date}" required aria-label="Datum"><input name="time" value="${esc(u.time || "")}" placeholder="Zeit" aria-label="Zeit"></div>
+        <div class="frow"><input name="place" value="${esc(u.place || "")}" placeholder="Ort" aria-label="Ort"><input name="org" value="${esc(u.org || "")}" placeholder="Veranstalter" aria-label="Veranstalter"></div>
+        <input name="cat" value="${esc(u.cat || "")}" placeholder="Kategorie / Stärkeklasse" aria-label="Kategorie">
+        <button class="btn">Speichern</button></form>` : ""}
       ${open ? `<div class="tatt">${attSection(u.id)}</div>` : ""}`;
 }
 function viewTurniere() {
@@ -543,11 +703,30 @@ function viewTurniere() {
    <div class="sec-head"><h2>Turniere</h2><span class="note">${cnt("eingeteilt") + cnt("angemeldet")} fix · ${cnt("Warteliste")} Warteliste</span></div>
    <div class="card list">${list.map(tourRow).join("") || '<p class="empty">Keine kommenden Turniere.</p>'}</div>
    ${past.length ? `<details class="card pad" ${past.some(u => u.id === tOpen) ? "open" : ""}><summary class="lbl">Vergangene Turniere (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(tourRow).join("")}</div></details>` : ""}
+   ${isAdmin() ? `<details class="card pad" ${tImp ? "open" : ""}><summary class="lbl">Turniere einlesen (Excel / CSV)</summary>
+     <div class="planf stack">
+       <p class="small muted">In Excel die Zeilen mit Kopfzeile markieren (z. B. Datum, Zeit, Turnier, Ort, Veranstalter, Status), kopieren und hier einfügen. Oder eine CSV-Datei wählen. Bereits erfasste Turniere (gleiches Datum und Name) werden übersprungen.</p>
+       <textarea id="timp" rows="5" placeholder="Hier einfügen …">${esc(tImp?.text || "")}</textarea>
+       <input type="file" id="tfile" accept=".csv,.txt,text/csv" aria-label="CSV-Datei">
+       ${tImp?.list ? (tImp.list.length ? `<div class="card list impprev">${tImp.list.map(u => `<div class="row static" style="grid-template-columns:auto minmax(0,1fr)"><span class="small"><b>${u.date.split("-").reverse().join(".")}</b>${u.time ? "<br>" + esc(u.time) : ""}</span><span class="mid"><b>${esc(u.name)}</b><span>${esc(u.place || "Ort offen")}${u.org ? " · " + esc(u.org) : ""} · ${esc(u.status)}</span></span></div>`).join("")}</div>
+         <button class="btn" id="timpgo">${tImp.list.length} Turniere übernehmen</button>` : `<p class="small" style="color:var(--red-ink)">Keine Turniere erkannt. Braucht mindestens eine Spalte mit Datum und eine mit dem Namen.</p>`) : ""}
+       <button class="btn ghost" id="timpchk">Prüfen</button></div></details>
    <form class="inline card pad" id="addu"><input id="un" placeholder="Name des Turniers" required aria-label="Name"><input id="ud" type="date" required aria-label="Datum">
      <input id="ut" placeholder="Zeit, z. B. 10:00–12:00" aria-label="Zeit"><input id="uo" placeholder="Ort" aria-label="Ort">
-     <select id="us" aria-label="Status"><option>angemeldet</option><option>eingeteilt</option><option>Warteliste</option></select><button class="btn">Turnier anlegen</button></form>`;
+     <select id="us" aria-label="Status"><option>angemeldet</option><option>eingeteilt</option><option>Warteliste</option></select><button class="btn">Turnier anlegen</button></form>` : ""}`;
+  if (!isAdmin()) { V.querySelectorAll("[data-topen]").forEach(b => b.onclick = () => { tOpen = tOpen === b.dataset.topen ? null : b.dataset.topen; render(true); }); bindAtt(); return; }
   V.querySelector("#addu").onsubmit = e => { e.preventDefault(); act(() => db.addTournament({ name: V.querySelector("#un").value.trim(), date: V.querySelector("#ud").value, time: V.querySelector("#ut").value.trim(), place: V.querySelector("#uo").value.trim() || "Ort offen", status: V.querySelector("#us").value }), "Turnier angelegt"); };
   V.querySelectorAll("[data-st]").forEach(s => s.onchange = () => act(() => db.setTournamentStatus(s.dataset.st, s.value), "Status gespeichert"));
+  V.querySelectorAll("[data-tedit]").forEach(b => b.onclick = () => { tEdit = tEdit === b.dataset.tedit ? null : b.dataset.tedit; render(true); });
+  V.querySelectorAll("[data-tsave]").forEach(f => f.onsubmit = e => { e.preventDefault(); const id = f.dataset.tsave; tEdit = null;
+    act(() => db.updateTournament(id, { name: f.name.value.trim(), date: f.date.value, time: f.time.value.trim(), place: f.place.value.trim(), org: f.org.value.trim(), cat: f.cat.value.trim() }), "Turnier gespeichert"); });
+  const chk = () => { const text = V.querySelector("#timp").value; tImp = { text, list: db.parseTournaments(text) }; render(true); };
+  V.querySelector("#timpchk").onclick = chk;
+  V.querySelector("#tfile").onchange = async e => { const f = e.target.files[0]; if (!f) return; const buf = await f.arrayBuffer();
+    let text = new TextDecoder("utf-8").decode(buf); if (text.includes("\uFFFD")) text = new TextDecoder("windows-1252").decode(buf);
+    V.querySelector("#timp").value = text.replace(/^\uFEFF/, ""); chk(); };
+  const go = V.querySelector("#timpgo");
+  if (go) go.onclick = () => { const list = tImp.list; tImp = null; act(async () => { const r = await db.importTournaments(list); toast(`${r.added} Turniere übernommen${r.skipped ? `, ${r.skipped} schon vorhanden` : ""}`); }); };
   V.querySelectorAll("[data-topen]").forEach(b => b.onclick = () => { tOpen = tOpen === b.dataset.topen ? null : b.dataset.topen; render(true); });
   bindAtt();
   V.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
@@ -604,6 +783,29 @@ function bindDocs() {
   };
 }
 function rulesSection() {
+  if (state.team.level === "G") return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. G <span class="muted small">BRACK.CH play more football</span></h3></summary>
+    <div class="rgrid">
+      <div class="rbox"><b>Spiel 2 vs. 2</b><ul>
+        <li>Kleinfeld ca. 20 × 15 m, Mini-Tore (mind. 1.2 × 0.8 m), ersatzweise Stangen, Pylonen oder umgekippte 5-m-Tore</li>
+        <li>Keine Torspieler/innen</li>
+        <li>Anspiel, Abstoss und Eckball neben dem Tor von der Torlinie, flach als Pass oder Dribbling</li>
+        <li>Ball im Aus: mit dem nächsten Ersatzball weiter, Einwurf mit dem Fuss (Pass oder Dribbling)</li>
+        <li>Nach einem Tor mit dem Ball aus dem Tor weiter, das Team mit dem Tor geht in die eigene Hälfte zurück</li></ul></div>
+      <div class="rbox"><b>Fair und einfach</b><ul>
+        <li>Kein Penalty, Freistösse indirekt, Gegner 5 Kinderschritte weg</li>
+        <li>Kein Abseits, keine Strafen, keine Rangliste</li>
+        <li>Kinder regeln das Spiel selbst. Strittig: Schere-Stein-Papier</li>
+        <li>Wechsel idealerweise nach jedem Tor</li></ul></div>
+      <div class="rbox"><b>Turnier</b><ul>
+        <li>Teams zu 3–4 Kindern, 6–8 Spielrunden nach Rotation, ca. 120 Min.</li>
+        <li>Pause 3 Min. zwischen den Runden, 5–10 Min. nach 3–4 Runden</li>
+        <li>Vielseitigkeitsposten (3 vs. 3) im Wechsel mit dem Spiel, z. B. Hütchen belegen, Würfelstafette, Fangis</li>
+        <li>Ball Grösse 3 oder 4 (290 g)</li></ul></div>
+      <div class="rbox"><b>Für alle</b><ul>
+        <li>Schienbeinschoner Pflicht, keine Stollenschuhe</li>
+        <li>Shakehands nach jedem Spiel</li>
+        <li>Trainer und Wechselkinder in der Coachingzone, Eltern in der Zuschauerzone</li></ul></div>
+    </div><p class="small muted">Zusammenfassung der Ausführungsbestimmungen Kat. G (football.ch). Massgebend ist das Original-Dokument.</p></details>`;
   return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. E <span class="muted small">BRACK.CH play more football</span></h3></summary>
     <div class="rgrid">
       <div class="rbox"><b>Kleinfeld 3 vs. 3</b><ul>
@@ -650,6 +852,7 @@ function viewWissen() {
       <li style="--pc:var(--p-aus)"><span class="fn">4</span><div><b>Ausklang</b><span class="fw">ca. 10 Min.</span><p>Ruhiges Spiel, Schlusswort, persönliche Verabschiedung.</p></div></li>
      </ol></section>
    <section class="card pad stack"><h3>Zeitplan</h3><div class="tbars">
+     ${state.team.level === "G" ? `<div><b class="small">60 Min.</b> <span class="small muted">Vorschlag G-Junioren (App-Planung)</span>${bar([[G, 13, "5+8'", "Auff./Einl."], [R, 10, "10'", "Spielen"], [K, 13, "13'", "Lernen"], [L, 8, "8'", "Vielseitigk."], [R, 10, "10'", "Match"], [G, 6, "6'", "Ausklang"]])}</div>` : ""}
      <div><b class="small">90 Min.</b> <span class="small muted">Beispiel Kat. E, S. 58–59</span>${bar([[G, 15, "15'", "Einleitung"], [R, 15, "15'", "Spielen"], [K, 15, "15'", "Lernen"], [L, 15, "15'", "Vielseitigk."], [R, 20, "20'", "Match"], [G, 10, "10'", "Ausklang"]])}</div>
      <div><b class="small">75 Min.</b> <span class="small muted">Beispiel Kat. G, S. 54–55</span>${bar([[G, 10, "10'", "Einleitung"], [R, 10, "10'", "Spielen"], [K, 15, "15'", "Lernen"], [L, 10, "10'", "Vielseitigk."], [R, 20, "20'", "Match"], [G, 10, "10'", "Ausklang"]])}</div>
      </div><p class="small muted">Auffangen läuft offen vor dem Trainingsbeginn.</p></section>

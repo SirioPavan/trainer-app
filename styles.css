@@ -362,3 +362,19 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 #ndsx .frow input{flex:1 1 140px;min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--surface)}
 #ndsx .btnrow{margin-top:6px}
 #ndsx #ohall,#ndsx #ograss{flex-basis:100%}
+
+/* Trainingsplanung */
+.planf{margin-top:10px;gap:8px}
+.planf .frow{display:flex;flex-wrap:wrap;gap:8px}
+.planf .frow>*{flex:1 1 110px;min-width:0}
+.planf input,.planf select,.planf textarea{border:1.5px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--surface);width:100%;min-width:0}
+.planf label.lbl{display:flex;flex-direction:column;gap:4px}
+.planf .chk{display:flex;align-items:center;gap:8px;font-size:14px}
+.planf .chk input{width:auto;flex:none}
+.planmsg{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:var(--soft)}
+.minrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px}
+.minrow label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.btnrow.tight{display:flex;gap:6px;margin:0}
+.teamsel{background:transparent;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:0;cursor:pointer}
+.teamsel option{color:#151515}
+.impprev{max-height:320px;overflow:auto}
