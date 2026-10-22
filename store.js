@@ -27,7 +27,8 @@ function emit() { listeners.forEach(fn => fn()); }
 /* ================= Start ================= */
 export async function init() {
   const qs = new URLSearchParams(location.search), forceDemo = qs.has("demo");
-  if (forceDemo && /^g/i.test(qs.get("demo") || "")) TEAM = "g-junioren";
+  const dq = (qs.get("demo") || "").toLowerCase();
+  if (forceDemo && /^[fg]/.test(dq)) TEAM = dq[0] + "-junioren";
   state.forced = forceDemo;
   if (!forceDemo && CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase) {
     state.mode = "cloud";
@@ -193,10 +194,12 @@ function demoPlayers() {
       created_at: "2026-08-01T00:00:00" };
   });
 }
-function demoPlayersG() {
-  const names = ["Lio", "Mila", "Nael", "Ronja", "Tim", "Yara", "Elia", "Zoe", "Jan", "Nora"], last = ["Bühler", "Kunz", "Lang", "Moser", "Ott", "Roth", "Senn", "Vogt", "Wyss", "Egli"];
-  return names.map((n, i) => ({ id: "dg" + i, name: n + " " + last[i], first_name: n, last_name: last[i], year: 2020 + (i % 2), active: true,
-    birth_date: `${2020 + (i % 2)}-${String(2 + i).padStart(2, "0")}-1${i % 9}`, nds_id: String(9500001 + i), street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
+function demoPlayersG(lv = "G") {
+  const F = lv === "F", y0 = F ? 2018 : 2020;
+  const names = F ? ["Arian", "Lea", "Fynn", "Ella", "Luis", "Malia", "Noel", "Ida", "Gian", "Sara", "Levin", "Alva"] : ["Lio", "Mila", "Nael", "Ronja", "Tim", "Yara", "Elia", "Zoe", "Jan", "Nora"];
+  const last = ["Bühler", "Kunz", "Lang", "Moser", "Ott", "Roth", "Senn", "Vogt", "Wyss", "Egli", "Frey", "Hug"];
+  return names.map((n, i) => ({ id: "d" + lv.toLowerCase() + i, name: n + " " + last[i], first_name: n, last_name: last[i], year: y0 + (i % 2), active: true,
+    birth_date: `${y0 + (i % 2)}-${String(1 + (i % 12)).padStart(2, "0")}-1${i % 9}`, nds_id: String((F ? 9600001 : 9500001) + i), street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
     guardian1_name: "Elternteil " + last[i], guardian1_phone: "+41 79 000 01 " + String(10 + i), guardian1_email: "eltern." + last[i].toLowerCase() + "@beispiel.ch", created_at: "2026-08-01T00:00:00" }));
 }
 function addDemoHistory(d) {
@@ -211,7 +214,7 @@ function addDemoHistory(d) {
   }
 }
 // Vorführung mit zwei getrennten Mannschaften: E (Beispieldaten) und G (leer gestartet, Plan automatisch erzeugt)
-const DEMO_TEAMS = [{ id: "e-junioren", name: "E-Junioren", level: "E", role: "admin" }, { id: "g-junioren", name: "G-Junioren", level: "G", role: "admin" }];
+const DEMO_TEAMS = [{ id: "e-junioren", name: "E-Junioren", level: "E", role: "admin" }, { id: "f-junioren", name: "F-Junioren", level: "F", role: "admin" }, { id: "g-junioren", name: "G-Junioren", level: "G", role: "admin" }];
 const demoKey = () => TEAM === "e-junioren" ? LS : LS + "-" + TEAM;
 function loadDemo() {
   if (!DEMO_TEAMS.some(t => t.id === TEAM)) TEAM = "e-junioren";
@@ -221,11 +224,13 @@ function loadDemo() {
   state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time })).filter(x => forLevel(x, team.level));
   let d = null;
   try { d = JSON.parse(localStorage.getItem(demoKey())); } catch (e) {}
-  if (!d && team.level === "G") {
+  if (!d && team.level !== "E") {
     const from = today(), to = new Date(Date.now() + 70 * 864e5).toLocaleDateString("sv-SE");
-    d = { trainings: generateSeries({ from, to, slots: [{ wd: 3, start: "16:30", end: "17:30", place: "hall" }, { wd: 6, start: "09:00", end: "10:00", place: "hall" }],
-            themes: themesFor("G"), exercises: state.exercises }).map(t => ({ ...t, id: uid() })),
-          tournaments: [], players: state.forced ? demoPlayersG() : [], attendance: {}, people: [] };
+    const slots = team.level === "G" ? [{ wd: 3, start: "16:30", end: "17:30", place: "hall" }, { wd: 6, start: "09:00", end: "10:00", place: "hall" }]
+      : [{ wd: 2, start: "17:00", end: "18:15", place: "hall" }, { wd: 5, start: "17:00", end: "18:15", place: "hall" }];
+    d = { trainings: generateSeries({ from, to, slots,
+            themes: themesFor(team.level), exercises: state.exercises }).map(t => ({ ...t, id: uid() })),
+          tournaments: [], players: state.forced ? demoPlayersG(team.level) : [], attendance: {}, people: [] };
   }
   if (!d) {
     d = {

@@ -438,7 +438,7 @@ function viewTraining(id) {
 /* ================= Übungen ================= */
 let q = "", fph = "all", fpl = "all", libMode = "ex";
 function viewTemplates() {
-  const groups = [[state.team.level === "G" ? "Vorlagen G-Junioren" : "Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
+  const groups = [[{ G: "Vorlagen G-Junioren", F: "Vorlagen F-Junioren" }[state.team.level] || "Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
   return groups.filter(g => g[1].length).map(([g, list]) => `<div class="sec-head"><h3>${esc(g)}</h3><span class="note">${list.length}</span></div>
     <div class="card list">${list.map(tp => `<button class="row" data-tpl="${tp.id}" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(tp.title)}</b><span>${esc(tp.thema)} · ${mins(tp)}' · ${tp.blocks.length} Übungen</span></span><span class="chev">›</span></button>`).join("")}</div>`).join("")
@@ -783,6 +783,30 @@ function bindDocs() {
   };
 }
 function rulesSection() {
+  if (state.team.level === "F") return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. F <span class="muted small">BRACK.CH play more football</span></h3></summary>
+    <div class="rgrid">
+      <div class="rbox"><b>Kleinfeld 3 vs. 3</b><ul>
+        <li>Feld ca. 25 × 20 m, Mini-Tore mind. 1.2 × 0.8 m (2 m vor der Linie), keine Torhüter</li>
+        <li>Anspiel, Abstoss und Eckball von der Mitte der Torlinie, flach als Pass oder Dribbling</li>
+        <li>Ball im Aus: sofort mit Ersatzball aus der Zone weiter. Wer zuletzt berührt hat, holt den Ball (Team kurz in Unterzahl)</li>
+        <li>Kein Penalty, Freistösse indirekt, Gegner 5 Kinderschritte weg</li>
+        <li>Nach einem Tor mit dem Ball aus dem Tor weiter, Wechsel idealerweise nach jedem Tor</li></ul></div>
+      <div class="rbox"><b>Grossfeld 4 vs. 4</b><ul>
+        <li>Feld ca. 30 × 25 m, 5-m-Tore, Strafraum 8 m (ganze Breite)</li>
+        <li>Mit Torhüter/in, wird jede Spielrunde gewechselt</li>
+        <li>Anspiel in der Mitte, Abstoss aus der Hand im Strafraum. Legt die Torhüterin den Ball hin: führen und passen</li>
+        <li>Eckball von der Fahne (kein direktes Tor), Penalty 2 Kinderschritte hinter der Strafraumlinie</li>
+        <li>Wechsel nach Zeit (alle 2, 4 oder 6 Min.), alle spielen gleich lang</li></ul></div>
+      <div class="rbox"><b>Turnier</b><ul>
+        <li>6–12 Teams zu optimal 5–6 Kindern, 5–7 Spielrunden nach Rotation, ca. 120 Min.</li>
+        <li>Spieldauer 12 Min., Pause 3 Min., nach 3–4 Runden 5–10 Min.</li>
+        <li>Ball Grösse 4 (290 g)</li></ul></div>
+      <div class="rbox"><b>Für alle</b><ul>
+        <li>Kein Offside, keine Strafen, keine Rangliste</li>
+        <li>Kinder regeln das Spiel selbst. Strittig: Schere-Stein-Papier</li>
+        <li>Schienbeinschoner Pflicht, keine Stollenschuhe, Spielerkarte (clubcorner)</li>
+        <li>Shakehands nach jedem Spiel, Trainer in der Coachingzone, Eltern in der Zuschauerzone</li></ul></div>
+    </div><p class="small muted">Zusammenfassung der Ausführungsbestimmungen Kat. F (football.ch). Massgebend ist das Original-Dokument.</p></details>`;
   if (state.team.level === "G") return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. G <span class="muted small">BRACK.CH play more football</span></h3></summary>
     <div class="rgrid">
       <div class="rbox"><b>Spiel 2 vs. 2</b><ul>
