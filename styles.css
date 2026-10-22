@@ -378,3 +378,49 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .teamsel{background:transparent;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:0;cursor:pointer}
 .teamsel option{color:#151515}
 .impprev{max-height:320px;overflow:auto}
+
+/* ===== PC / grosse Bildschirme: Navigation links, Inhalte in Spalten ===== */
+@media (min-width:1024px){
+  body{padding-left:232px}
+  .shell{max-width:1240px}
+  .nav{top:0;bottom:0;right:auto;width:232px;border-top:0;border-right:1px solid var(--line);padding:118px 12px 16px;overflow-y:auto}
+  .nav .in{max-width:none;grid-template-columns:1fr;gap:4px}
+  .nav button{flex-direction:row;justify-content:flex-start;gap:12px;font-size:15px;padding:11px 14px;border-radius:10px}
+  .nav button:hover{background:var(--soft)}
+  .nav button[aria-current="page"]{background:var(--soft)}
+  .top{padding-inline:28px}
+  main{padding:24px 28px 40px;gap:18px}
+  .toast{bottom:24px;left:calc(50% + 116px)}
+  .pdfsheet{align-items:center}
+  .pdfsheet-in{margin-bottom:0}
+  /* Planung: Nächstes Training und Turnier nebeneinander, Termine zweispaltig */
+  body[data-view="trainings"] main{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
+  body[data-view="trainings"] main>*{grid-column:1/-1}
+  body[data-view="trainings"] main>.hero{grid-column:1}
+  body[data-view="trainings"] main>.tourcard{grid-column:2;justify-content:center}
+  body[data-view="trainings"] main>.card.list{display:grid;grid-template-columns:1fr 1fr;column-gap:0}
+  body[data-view="trainings"] main>.card.list>.row:nth-child(even){border-left:1px solid var(--line)}
+  body[data-view="trainings"] main>.card.list>.row:nth-child(2){border-top:0}
+  /* Training und Übung: Skizze links, Beschreibung rechts */
+  .card.ex{display:grid;grid-template-columns:minmax(320px,40%) minmax(0,1fr);align-items:start}
+  .card.ex>svg{align-self:start;height:auto}
+  .card.ex .body{padding:16px 18px}
+  body[data-view="training"] .dhead{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 24px;align-items:start}
+  body[data-view="training"] .dhead>h2,body[data-view="training"] .dhead>div:first-of-type{grid-column:1}
+  body[data-view="training"] .dhead>.facts{grid-column:2;grid-row:1/span 4}
+  body[data-view="training"] .dhead>.tl,body[data-view="training"] .dhead>.legend{grid-column:1}
+  /* Übungsbibliothek dreispaltig */
+  body[data-view="uebungen"] main>.card.list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  body[data-view="uebungen"] main>.card.list>.row{border-top:1px solid var(--line);border-right:1px solid var(--line)}
+  body[data-view="uebungen"] main>.card.list>.row:nth-child(-n+3){border-top:0}
+  body[data-view="uebungen"] main>.card.list>.row:nth-child(3n){border-right:0}
+  /* Wissen: Karten zweispaltig */
+  .hpgrid{grid-template-columns:repeat(4,1fr)}
+}
+@media (min-width:1500px){
+  .shell{max-width:1400px}
+  body[data-view="trainings"] main>.card.list{grid-template-columns:repeat(3,1fr)}
+  body[data-view="trainings"] main>.card.list>.row:nth-child(even){border-left:0}
+  body[data-view="trainings"] main>.card.list>.row:not(:nth-child(3n+1)){border-left:1px solid var(--line)}
+  body[data-view="trainings"] main>.card.list>.row:nth-child(3){border-top:0}
+}

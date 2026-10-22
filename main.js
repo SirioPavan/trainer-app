@@ -74,6 +74,7 @@ function render(keepScroll) {
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen" };
   document.getElementById("title").textContent = route.training ? (route.training.startsWith("tpl:") ? "Vorlage" : "Training") : route.exercise ? "Übung" : T[route.tab];
+  document.body.dataset.view = route.training ? "training" : route.exercise ? "exercise" : route.tab;   // für das PC-Layout
   if (route.training) viewTraining(route.training);
   else if (route.exercise) viewExercise(route.exercise);
   else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen })[route.tab]();
