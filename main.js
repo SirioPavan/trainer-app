@@ -343,7 +343,7 @@ function exCard(e, idx, t, surface) {
       <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</div>
       ${e.org ? `<p><span class="lbl">Organisation:</span> ${esc(e.org)}</p>` : ""}
       ${e.ablauf ? `<p><span class="lbl">Ablauf:</span> ${esc(e.ablauf)}</p>` : ""}
-      ${e.offen ? `<div class="fahr"><div><b>Offen starten</b>${esc(e.offen)}</div><div><b>Üben</b>${esc(e.ueben)}</div><div><b>Wetteifern</b>${esc(e.wett)}</div></div>` : ""}
+      ${e.offen ? `<div class="fahr">${[["Offen starten", e.offen], ["Üben", e.ueben], ["Wetteifern", e.wett]].filter(([, v]) => v).map(([k, v]) => `<div><b>${k}</b>${esc(v)}</div>`).join("")}</div>` : ""}
       ${e.own ? `<p class="own">${esc(e.own)}</p>` : ""}
       ${e.coach?.length ? `<div><span class="lbl">Coaching:</span><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
       ${e.var ? `<p class="var"><span class="lbl">Rad der Variation:</span> ${esc(e.var)}</p>` : ""}

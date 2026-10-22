@@ -184,7 +184,7 @@ function exBlock(b, place, L = DENSE[0]) {
     <h4>${esc(e.name)}${e.page ? `<span class="pdf-pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</h4>
     ${e.org ? `<p><b>Organisation:</b> ${esc(e.org)}</p>` : ""}
     ${e.ablauf ? `<p><b>Ablauf:</b> ${esc(e.ablauf)}</p>` : ""}
-    ${e.offen ? `<div class="pdf-fahr"><div><b>Offen starten</b>${esc(e.offen)}</div><div><b>Üben</b>${esc(e.ueben)}</div><div><b>Wetteifern</b>${esc(e.wett)}</div></div>` : ""}
+    ${e.offen ? `<div class="pdf-fahr">${[["Offen starten", e.offen], ["Üben", e.ueben], ["Wetteifern", e.wett]].filter(([, v]) => v).map(([k, v]) => `<div><b>${k}</b>${esc(v)}</div>`).join("")}</div>` : ""}
     ${e.own ? `<p>${esc(e.own)}</p>` : ""}
     ${e.coach?.length ? (L.tight ? `<p><b>Coaching:</b> ${e.coach.map(esc).join(" · ")}</p>` : `<p><b>Coaching:</b></p><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul>`) : ""}
     ${e.var ? `<p class="pdf-var"><b>Variation:</b> ${esc(e.var)}</p>` : ""}

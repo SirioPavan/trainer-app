@@ -162,7 +162,7 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .row .mid b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .empty{padding:20px;text-align:center;color:var(--muted)}
 @media (min-width:640px){
-  .fahr{grid-template-columns:repeat(3,1fr)}
+  .fahr{grid-auto-flow:column;grid-auto-columns:1fr}
   .steps{grid-template-columns:1fr 1fr 2fr 1fr}
   .arrows{grid-template-columns:repeat(3,1fr)}
   .exgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -348,7 +348,7 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .pdf-ext ul{margin:0 0 calc(4px * var(--k,1));padding-left:calc(16px * var(--k,1))}
 .pdf-ext b{color:#141414}
 .pdf-var{color:#5F5A5A}
-.pdf-fahr{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(6px * var(--k,1));margin:calc(4px * var(--k,1)) 0 calc(6px * var(--k,1))}
+.pdf-fahr{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:calc(6px * var(--k,1));margin:calc(4px * var(--k,1)) 0 calc(6px * var(--k,1))}
 .pdf-fahr div{background:#F7F4F4;border-radius:calc(6px * var(--k,1));padding:calc(5px * var(--k,1)) calc(7px * var(--k,1));font-size:calc(10.5px * var(--k,1))}
 .pdf-fahr b{display:block;font-size:calc(9.5px * var(--k,1));text-transform:uppercase;letter-spacing:.05em;color:#B5121A}
 
