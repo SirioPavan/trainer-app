@@ -1,6 +1,6 @@
 // Service Worker: hält die App-Dateien bereit, damit sie schnell startet.
 // Daten kommen immer frisch aus der Datenbank (werden nicht zwischengespeichert).
-const CACHE = "fcs-trainer-v23";
+const CACHE = "fcs-trainer-v24";
 const SHELL = ["./", "index.html", "styles.css", "config.js", "main.js", "store.js", "diagram.js", "pdf.js", "plan.js",
   "wissen.js", "seed-data.js", "manifest.webmanifest", "logo-white.png", "icon-192-v2.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));

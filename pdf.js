@@ -167,24 +167,26 @@ function flowRows(host, head, thead, rows, fs) {
 
 /* ---------- 2) Einzelnes Training ---------- */
 // Skizze als Bild mit fester Grösse – so übernimmt html2canvas den ganzen Ausschnitt
-const SKW = 220, SKH = Math.round(SKW * 74 / 110);
-function sketchImg(d, place) {
+function sketchImg(d, place, SKW) {
+  const SKH = Math.round(SKW * 74 / 110);
   const svg = fixVars(drawDiagram({ ...d, s: place === "hall" ? "hall" : "grass" }))
     .replace("<svg ", `<svg width="${SKW * 2}" height="${SKH * 2}" `);
   return `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" width="${SKW}" height="${SKH}" alt="">`;
 }
-function exBlock(b, place) {
+// Verdichtungsstufen: so lange kleiner setzen, bis das Training auf 2 Seiten passt
+const DENSE = [{ k: 1, sk: 220 }, { k: .93, sk: 195 }, { k: .86, sk: 175 }, { k: .8, sk: 155, tight: 1 }, { k: .74, sk: 140, tight: 1 }, { k: .68, sk: 125, tight: 1 }];
+function exBlock(b, place, L = DENSE[0]) {
   const e = ex(b.ex);
   const ph = `<div class="pdf-ph" style="border-color:${pc(b.ph)}"><i style="background:${pc(b.ph)}"></i>${esc(PH[b.ph]?.t || b.ph)}<span>${b.min} Min.</span></div>`;
   if (!e) return `<section class="pdf-ex">${ph}<p class="pdf-mut">Übung nicht gefunden.</p></section>`;
-  const sk = e.d ? `<div class="pdf-sk">${sketchImg(e.d, place)}</div>` : "";
+  const sk = e.d ? `<div class="pdf-sk" style="width:${L.sk}px">${sketchImg(e.d, place, L.sk)}</div>` : "";
   return `<section class="pdf-ex">${ph}<div class="pdf-exb">${sk}<div class="pdf-ext">
     <h4>${esc(e.name)}${e.page ? `<span class="pdf-pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</h4>
     ${e.org ? `<p><b>Organisation:</b> ${esc(e.org)}</p>` : ""}
     ${e.ablauf ? `<p><b>Ablauf:</b> ${esc(e.ablauf)}</p>` : ""}
     ${e.offen ? `<div class="pdf-fahr"><div><b>Offen starten</b>${esc(e.offen)}</div><div><b>Üben</b>${esc(e.ueben)}</div><div><b>Wetteifern</b>${esc(e.wett)}</div></div>` : ""}
     ${e.own ? `<p>${esc(e.own)}</p>` : ""}
-    ${e.coach?.length ? `<p><b>Coaching:</b></p><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}
+    ${e.coach?.length ? (L.tight ? `<p><b>Coaching:</b> ${e.coach.map(esc).join(" · ")}</p>` : `<p><b>Coaching:</b></p><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul>`) : ""}
     ${e.var ? `<p class="pdf-var"><b>Variation:</b> ${esc(e.var)}</p>` : ""}
   </div></div></section>`;
 }
@@ -196,10 +198,16 @@ export async function trainingPdf(t, isTpl) {
       <dt>Thema</dt><dd>${esc(t.thema)}</dd><dt>Ziel</dt><dd>${esc(t.ziel)}</dd><dt>Fragen</dt><dd>${esc(t.fragen)}</dd><dt>Material</dt><dd>${esc(t.material)}</dd>
       ${t.note ? `<dt>Notiz</dt><dd>${esc(t.note)}</dd>` : ""}</dl>
     <div class="pdf-tl">${t.blocks.map(b => `<div style="flex:${b.min};background:${pc(b.ph)}"><b>${b.min}'</b><span>${SHORT[b.ph]}</span></div>`).join("")}</div></div>`;
-  const items = [intro, ...t.blocks.map(b => exBlock(b, t.place))];
+
   const name = isTpl ? `Vorlage_${(t.title || "Training").replace(/\W+/g, "-")}.pdf` : `Training_${t.date}_${(t.thema || "").replace(/[^\wäöüÄÖÜ]+/g, "-")}.pdf`;
   return build("portrait", host => {
-    const pages = flow(host, "portrait", head, items);
+    let pages;
+    for (const L of DENSE) {
+      host.innerHTML = ""; host.style.setProperty("--k", L.k);
+      pages = flow(host, "portrait", head, [intro, ...t.blocks.map(b => exBlock(b, t.place, L))]);
+      if (pages.length <= 2) break;
+    }
+    pages.forEach(p => p.style.setProperty("--k", host.style.getPropertyValue("--k")));
     footers(pages, `FC Seuzach · ${isTpl ? esc(t.title || "") : dch(t.date) + " · " + esc(t.thema)}`);
     return pages;
   }, name);

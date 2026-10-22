@@ -326,31 +326,31 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .pdf-tour td:first-child{box-shadow:inset 4px 0 0 #D2161E}
 .pdf-st{float:right;font-size:.9em;color:#ffb3b6;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
 /* Einzeltraining */
-.pdf-intro{margin-bottom:10px}
-.pdf-facts{display:grid;grid-template-columns:78px 1fr;gap:4px 12px;margin:0 0 10px;font-size:12.5px;background:#F7F4F4;border-radius:8px;padding:10px 12px}
-.pdf-facts dt{font-weight:800;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;color:#B5121A;padding-top:2px}
+.pdf-intro{margin-bottom:calc(10px * var(--k,1))}
+.pdf-facts{display:grid;grid-template-columns:calc(78px * var(--k,1)) 1fr;gap:calc(4px * var(--k,1)) calc(12px * var(--k,1));margin:0 0 calc(10px * var(--k,1));font-size:calc(12.5px * var(--k,1));background:#F7F4F4;border-radius:calc(8px * var(--k,1));padding:calc(10px * var(--k,1)) calc(12px * var(--k,1))}
+.pdf-facts dt{font-weight:800;text-transform:uppercase;font-size:calc(10.5px * var(--k,1));letter-spacing:.06em;color:#B5121A;padding-top:calc(2px * var(--k,1))}
 .pdf-facts dd{margin:0}
-.pdf-tl{display:flex;gap:2px;border-radius:6px;overflow:hidden;height:38px}
-.pdf-tl div{color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0;padding:0 2px;text-align:center}
-.pdf-tl b{font-size:13px;line-height:1}
-.pdf-tl span{font-size:8.5px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pdf-ex{margin-top:10px;border:1px solid #e3dddd;border-radius:8px;overflow:hidden}
-.pdf-ph{display:flex;align-items:center;gap:8px;font-family:"Barlow Condensed",sans-serif;font-weight:800;text-transform:uppercase;font-size:14px;letter-spacing:.03em;padding:5px 10px;background:#F3F1F1;border-left:6px solid}
+.pdf-tl{display:flex;gap:calc(2px * var(--k,1));border-radius:calc(6px * var(--k,1));overflow:hidden;height:calc(38px * var(--k,1))}
+.pdf-tl div{color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0;padding:0 calc(2px * var(--k,1));text-align:center}
+.pdf-tl b{font-size:calc(13px * var(--k,1));line-height:1}
+.pdf-tl span{font-size:calc(8.5px * var(--k,1));line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdf-ex{margin-top:calc(10px * var(--k,1));border:calc(1px * var(--k,1)) solid #e3dddd;border-radius:calc(8px * var(--k,1));overflow:hidden}
+.pdf-ph{display:flex;align-items:center;gap:calc(8px * var(--k,1));font-family:"Barlow Condensed",sans-serif;font-weight:800;text-transform:uppercase;font-size:calc(14px * var(--k,1));letter-spacing:.03em;padding:calc(5px * var(--k,1)) calc(10px * var(--k,1));background:#F3F1F1;border-left:calc(6px * var(--k,1)) solid}
 .pdf-ph i{display:none}
-.pdf-ph span{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:12px;color:#5F5A5A}
-.pdf-exb{display:flex;gap:12px;padding:9px 10px}
-.pdf-sk{flex:none;width:220px}
-.pdf-sk img{display:block;border-radius:6px}
-.pdf-ext{flex:1;min-width:0;font-size:11.5px}
-.pdf-ext h4{margin:0 0 4px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:17px;line-height:1.1;display:flex;gap:8px;align-items:baseline}
-.pdf-pg{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:10px;font-weight:700;color:#7a7474;white-space:nowrap}
-.pdf-ext p{margin:0 0 4px}
-.pdf-ext ul{margin:0 0 4px;padding-left:16px}
+.pdf-ph span{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:calc(12px * var(--k,1));color:#5F5A5A}
+.pdf-exb{display:flex;gap:calc(12px * var(--k,1));padding:calc(9px * var(--k,1)) calc(10px * var(--k,1))}
+.pdf-sk{flex:none;width:calc(220px * var(--k,1))}
+.pdf-sk img{display:block;border-radius:calc(6px * var(--k,1))}
+.pdf-ext{flex:1;min-width:0;font-size:calc(11.5px * var(--k,1))}
+.pdf-ext h4{margin:0 0 calc(4px * var(--k,1));font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:calc(17px * var(--k,1));line-height:1.1;display:flex;gap:calc(8px * var(--k,1));align-items:baseline}
+.pdf-pg{margin-left:auto;font-family:"Source Sans 3",sans-serif;font-size:calc(10px * var(--k,1));font-weight:700;color:#7a7474;white-space:nowrap}
+.pdf-ext p{margin:0 0 calc(4px * var(--k,1))}
+.pdf-ext ul{margin:0 0 calc(4px * var(--k,1));padding-left:calc(16px * var(--k,1))}
 .pdf-ext b{color:#141414}
 .pdf-var{color:#5F5A5A}
-.pdf-fahr{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}
-.pdf-fahr div{background:#F7F4F4;border-radius:6px;padding:5px 7px;font-size:10.5px}
-.pdf-fahr b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#B5121A}
+.pdf-fahr{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(6px * var(--k,1));margin:calc(4px * var(--k,1)) 0 calc(6px * var(--k,1))}
+.pdf-fahr div{background:#F7F4F4;border-radius:calc(6px * var(--k,1));padding:calc(5px * var(--k,1)) calc(7px * var(--k,1));font-size:calc(10.5px * var(--k,1))}
+.pdf-fahr b{display:block;font-size:calc(9.5px * var(--k,1));text-transform:uppercase;letter-spacing:.05em;color:#B5121A}
 
 /* Turnier- und Leiter-Anwesenheit, NDS */
 .attl{margin:12px 0 0}
