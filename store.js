@@ -12,7 +12,7 @@ const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
   mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren" },
-  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, people: [], documents: [], docUrls: {}, links: []
+  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, leaders: {}, people: [], documents: [], docUrls: {}, links: []
 };
 
 let sb = null;
@@ -115,6 +115,15 @@ async function load() {
     const { data } = await sb.from("attendance").select("*").in("training_id", ids);
     (data || []).forEach(a => { (state.attendance[a.training_id] ||= {})[a.player_id] = a.present; });
   }
+  // Turnier- und Leiter-Anwesenheit (Tabellen ab 10_nds_turniere.sql)
+  const tid = state.tournaments.map(u => u.id);
+  if (tid.length) {
+    const { data, error } = await sb.from("tournament_attendance").select("*").in("tournament_id", tid);
+    if (!error) (data || []).forEach(a => { (state.attendance[a.tournament_id] ||= {})[a.player_id] = a.present; });
+  }
+  state.leaders = {};
+  { const { data, error } = await sb.from("leader_attendance").select("event_id,user_id,present").eq("team_id", TEAM);
+    if (!error) (data || []).forEach(a => { (state.leaders[a.event_id] ||= {})[a.user_id] = a.present; }); }
   if (state.role) {
     const { data } = await sb.rpc("team_people", { t: TEAM });
     state.people = data || [];
@@ -138,7 +147,7 @@ const normU = u => ({ ...u, time: u.time_text, org: u.organizer, cat: u.category
 let timer = null;
 function subscribeLive() {
   const ch = sb.channel("team-" + TEAM);
-  ["attendance", "trainings", "tournaments", "players"].forEach(table =>
+  ["attendance", "trainings", "tournaments", "players", "tournament_attendance", "leader_attendance"].forEach(table =>
     ch.on("postgres_changes", { event: "*", schema: "public", table }, () => {
       clearTimeout(timer); timer = setTimeout(() => load().then(emit), 400);
     }));
@@ -184,21 +193,26 @@ function loadDemo() {
       trainings: SEED.trainings.map(t => ({ ...t, id: uid(), template_id: t.template_id })),
       tournaments: SEED.tournaments.map(u => ({ ...u, id: uid() })),
       players: state.forced ? demoPlayers() : [], attendance: {},
-      people: [{ email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false }]
+      people: []
     };
   }
-  if (state.forced && !d.trainings.some(t => t.date < today())) addDemoHistory(d);
+  // Vorführ-Trainerteam (mit erfundenen NDS-Nummern)
+  if (!d.people?.length || !d.people[0].user_id) d.people = [
+    { user_id: "demo-u1", email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false, nds_id: "9100001" },
+    { user_id: "demo-u2", email: "assistenz@verein.ch", role: "trainer", display_name: "Assistenz (Demo)", pending: false, nds_id: "" }];
+  if (state.forced && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
   state.exercises = SEED.exercises.map(normEx);
   state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time }));
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
-  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.role = "admin"; state.links = d.links || [];
+  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.role = "admin"; state.links = d.links || [];
+  state.user = { email: "demo", id: "demo-u1" };
 }
 function saveDemo() {
   try {
     localStorage.setItem(LS, JSON.stringify({
       trainings: state.trainings, players: state.players, attendance: state.attendance,
-      people: state.people, links: state.links,
+      people: state.people, links: state.links, leaders: state.leaders,
       tournaments: state.tournaments.map(u => ({ ...u, time_text: u.time, organizer: u.org, category: u.cat }))
     }));
   } catch (e) {}
@@ -208,17 +222,32 @@ export function resetDemo() { try { localStorage.removeItem(LS); } catch (e) {} 
 /* ================= Schreiben ================= */
 async function run(q) { const { error } = await q; if (error) throw error; }
 
-export async function setAttendance(trainingId, playerId, present) {
-  (state.attendance[trainingId] ||= {})[playerId] = present;
+// Trainings und Turniere teilen sich die Anwesenheits-Logik, liegen aber in getrennten Tabellen
+const attTable = id => state.tournaments.some(u => u.id === id) ? ["tournament_attendance", "tournament_id"] : ["attendance", "training_id"];
+export async function setAttendance(eventId, playerId, present) {
+  (state.attendance[eventId] ||= {})[playerId] = present;
   if (state.mode === "demo") return saveDemo();
-  await run(sb.from("attendance").upsert({ training_id: trainingId, player_id: playerId, present }));
+  const [tb, key] = attTable(eventId);
+  await run(sb.from(tb).upsert({ [key]: eventId, player_id: playerId, present }));
 }
-export async function setAllAttendance(trainingId, present) {
-  const map = (state.attendance[trainingId] = {});
+export async function setAllAttendance(eventId, present) {
+  const map = (state.attendance[eventId] = {});
   state.players.filter(p => p.active !== false).forEach(p => map[p.id] = present);
   if (state.mode === "demo") return saveDemo();
-  if (present) await run(sb.from("attendance").upsert(Object.keys(map).map(p => ({ training_id: trainingId, player_id: p, present: true }))));
-  else await run(sb.from("attendance").delete().eq("training_id", trainingId));
+  const [tb, key] = attTable(eventId);
+  if (present) await run(sb.from(tb).upsert(Object.keys(map).map(p => ({ [key]: eventId, player_id: p, present: true }))));
+  else await run(sb.from(tb).delete().eq(key, eventId));
+}
+export async function setLeader(eventId, userId, present) {
+  (state.leaders[eventId] ||= {})[userId] = present;
+  if (state.mode === "demo") return saveDemo();
+  if (present) await run(sb.from("leader_attendance").upsert({ team_id: TEAM, event_id: eventId, user_id: userId, present: true }));
+  else await run(sb.from("leader_attendance").delete().eq("event_id", eventId).eq("user_id", userId));
+}
+export async function setMemberNds(userId, nr) {
+  const p = state.people.find(x => x.user_id === userId); if (p) p.nds_id = nr.trim();
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.rpc("set_member_nds", { t: TEAM, uid: userId, nr: nr.trim() }));
 }
 
 export async function swapExercise(trainingId, idx, exId) {
@@ -241,7 +270,7 @@ export async function addTraining(date, templateId) {
   state.trainings.push(normT(data));
 }
 export async function deleteTraining(id) {
-  state.trainings = state.trainings.filter(t => t.id !== id); delete state.attendance[id];
+  state.trainings = state.trainings.filter(t => t.id !== id); delete state.attendance[id]; delete state.leaders[id];
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("trainings").delete().eq("id", id));
 }
@@ -315,22 +344,51 @@ export async function importPlayers(list) {
   return { added, updated };
 }
 
-/* NDS-Export im Format der J+S-Anwesenheitsliste:
-   NDS-Personen-ID,Datum,Aktivität-Typ,Anwesend  (Ja/Nein) */
-export function ndsExport(from, to) {
-  const kids = state.players.filter(p => p.nds_id);
-  const trs = state.trainings.filter(t => t.date >= from && t.date <= to && Object.keys(state.attendance[t.id] || {}).length)
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
-  const lines = ["NDS-Personen-ID,Datum,Aktivität-Typ,Anwesend"];
-  for (const t of trs) {
-    const a = state.attendance[t.id] || {};
-    for (const p of kids.slice().sort((x, y) => x.nds_id.localeCompare(y.nds_id))) {
-      const joined = !p.created_at || p.created_at.slice(0, 10) <= t.date;   // erst ab Eintritt ins Kader
-      if (a[p.id] !== undefined || (p.active !== false && joined))
-        lines.push(`${p.nds_id},${t.date},J+S Training,${a[p.id] ? "Ja" : "Nein"}`);
+/* ================= NDS-Export (J+S) =================
+   Vorlagen aus der NDS: UTF-8 mit BOM, Semikolon, CRLF, Spalten in fester Reihenfolge.
+   anwesenheitskontrolle: PERSONENNUMMER;FUNKTION;DATUM;AKTIVITÄTSTYP;ZEIT;DAUER;ORT  (eine Zeile pro anwesende Person)
+   aktivitaeten:          AKTIVITAETSTYP;DATUM;ZEIT;DAUER;ORT;FOKUS
+   Training: Zeit, Dauer (60/75/90) und Ort Pflicht · Wettkampf: ohne Zeit, Dauer und Ort */
+export const NDS_ORT_DEFAULT = { hall: "Turnhalle Hettlingen", grass: "Sportplatz Hettlingen" };
+const NDS_DUR = [45, 60, 75, 90];
+const chDate = iso => iso.split("-").reverse().join(".");
+const minsOf = (a, b) => { const [h1, m1] = a.split(":").map(Number), [h2, m2] = b.split(":").map(Number); return h2 * 60 + m2 - (h1 * 60 + m1); };
+const ndsDur = t => { const m = minsOf(t.start, t.end); return NDS_DUR.filter(d => d <= m).pop() || NDS_DUR[0]; };
+const csvCell = v => String(v ?? "").replace(/[;\r\n]+/g, " ").trim();
+const csvOut = rows => "﻿" + rows.map(r => r.map(csvCell).join(";")).join("\r\n") + "\r\n";
+const TOUR_OK = ["eingeteilt", "angemeldet"];
+function ndsEvents(from, to, ort, onlyWithAtt) {
+  const has = id => Object.values(state.attendance[id] || {}).some(Boolean) || Object.values(state.leaders[id] || {}).some(Boolean);
+  const tr = state.trainings.filter(t => t.date >= from && t.date <= to && (!onlyWithAtt || has(t.id)))
+    .map(t => ({ id: t.id, date: t.date, sort: t.date + t.start, typ: "Training", zeit: t.start, dauer: ndsDur(t), ort: ort[t.place] || "" }));
+  const tu = state.tournaments.filter(u => u.date >= from && u.date <= to && (onlyWithAtt ? has(u.id) : TOUR_OK.includes(u.status)))
+    .map(u => ({ id: u.id, date: u.date, sort: u.date + "99", typ: "Wettkampf", zeit: "", dauer: "", ort: "" }));
+  return [...tr, ...tu].sort((a, b) => a.sort.localeCompare(b.sort));
+}
+export function ndsExport(from, to, ort = NDS_ORT_DEFAULT) {
+  const ev = ndsEvents(from, to, ort, true);
+  const rows = [["PERSONENNUMMER", "FUNKTION", "DATUM", "AKTIVITÄTSTYP", "ZEIT", "DAUER", "ORT"]];
+  const missingKids = new Set(), missingLeaders = new Set();
+  let kidRows = 0, leaderRows = 0;
+  for (const e of ev) {
+    const base = [chDate(e.date), e.typ, e.zeit, e.dauer, e.ort];
+    for (const p of state.people.filter(x => x.user_id && (state.leaders[e.id] || {})[x.user_id])) {
+      if (!p.nds_id) { missingLeaders.add(p.display_name || p.email); continue; }
+      rows.push([p.nds_id, "Leiter/in", ...base]); leaderRows++;
+    }
+    const a = state.attendance[e.id] || {};
+    for (const p of state.players.filter(x => a[x.id]).sort((x, y) => x.name.localeCompare(y.name, "de"))) {
+      if (!p.nds_id) { missingKids.add(p.name); continue; }
+      rows.push([p.nds_id, "Teilnehmer/in", ...base]); kidRows++;
     }
   }
-  return { csv: lines.join("\n") + "\n", trainings: trs.length, rows: lines.length - 1, missing: state.players.filter(p => p.active !== false && !p.nds_id).map(p => p.name) };
+  return { csv: csvOut(rows), trainings: ev.filter(e => e.typ === "Training").length, tournaments: ev.filter(e => e.typ === "Wettkampf").length,
+    rows: rows.length - 1, kidRows, leaderRows, missing: [...missingKids], missingLeaders: [...missingLeaders] };
+}
+export function ndsActivities(from, to, ort = NDS_ORT_DEFAULT) {
+  const ev = ndsEvents(from, to, ort, false);
+  return { csv: csvOut([["AKTIVITAETSTYP", "DATUM", "ZEIT", "DAUER", "ORT", "FOKUS"], ...ev.map(e => [e.typ, chDate(e.date), e.zeit, e.dauer, e.ort, ""])]),
+    trainings: ev.filter(e => e.typ === "Training").length, tournaments: ev.filter(e => e.typ === "Wettkampf").length };
 }
 
 export async function addTournament(u) {
@@ -345,7 +403,7 @@ export async function setTournamentStatus(id, status) {
   await run(sb.from("tournaments").update({ status }).eq("id", id));
 }
 export async function deleteTournament(id) {
-  state.tournaments = state.tournaments.filter(u => u.id !== id);
+  state.tournaments = state.tournaments.filter(u => u.id !== id); delete state.attendance[id]; delete state.leaders[id];
   if (state.mode === "demo") return saveDemo();
   await run(sb.from("tournaments").delete().eq("id", id));
 }

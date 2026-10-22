@@ -351,3 +351,14 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .pdf-fahr{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}
 .pdf-fahr div{background:#F7F4F4;border-radius:6px;padding:5px 7px;font-size:10.5px}
 .pdf-fahr b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#B5121A}
+
+/* Turnier- und Leiter-Anwesenheit, NDS */
+.attl{margin:12px 0 0}
+.tattbtn{display:block;margin-top:4px;padding:0;text-align:left}
+.tatt{padding:0 12px 12px}
+.ndsol{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
+#ndsx{gap:6px}
+#ndsx .frow{display:flex;flex-wrap:wrap;gap:8px}
+#ndsx .frow input{flex:1 1 140px;min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--surface)}
+#ndsx .btnrow{margin-top:6px}
+#ndsx #ohall,#ndsx #ograss{flex-basis:100%}

@@ -225,6 +225,28 @@ function exCard(e, idx, t, surface) {
     </div></article>`;
 }
 const attOpen = {};
+/* Anwesenheit (Kinder + Leiter/innen) – für Trainings und Turniere gleich */
+function attSection(id) {
+  const a = state.attendance[id] || {}, ap = activePlayers(), c = attCount({ id }), n = ap.length;
+  const L = state.people.filter(p => p.user_id), la = state.leaders[id] || {}, lc = L.filter(p => la[p.user_id]).length;
+  const chip = (attr, key, on, label) => `<button ${attr}="${key}" data-ev="${id}" aria-pressed="${!!on}"><span class="dot">${on ? "✓" : ""}</span><span>${esc(label)}</span></button>`;
+  return `<section class="card pad stack">
+     <div class="sec-head"><h3>Anwesenheit</h3><span class="pill ${c ? "ok" : "open"}">${c}/${n} da${L.length ? ` · ${lc} Leiter` : ""}</span></div>
+     <div class="attbar"><i style="width:${n ? c / n * 100 : 0}%"></i></div>
+     ${n ? `<details class="more" data-attd="${id}" ${(attOpen[id] ?? !c) ? "open" : ""}><summary>${c ? "Liste" : "Jetzt erfassen"}</summary>
+       <div class="att">${ap.slice().sort((x, y) => x.name.localeCompare(y.name, "de")).map(p => chip("data-att", p.id, a[p.id], p.name)).join("")}</div>
+       <div class="btnrow"><button class="btn ghost" data-all="${id}">Alle anwesend</button><button class="btn ghost" data-none="${id}">Zurücksetzen</button></div>
+       ${L.length ? `<p class="lbl attl">Leiter/innen</p><div class="att">${L.map(p => chip("data-lead", p.user_id, la[p.user_id], p.display_name || p.email)).join("")}</div>` : ""}</details>`
+      : `<p class="small muted">Noch keine Kinder im Kader. Trage sie unter «Kader» ein.</p>`}
+   </section>`;
+}
+function bindAtt() {
+  V.querySelectorAll("[data-attd]").forEach(d => d.ontoggle = () => { attOpen[d.dataset.attd] = d.open; });
+  V.querySelectorAll("[data-att]").forEach(b => b.onclick = () => { const ev = b.dataset.ev, p = b.dataset.att; attOpen[ev] = true; act(() => db.setAttendance(ev, p, !(state.attendance[ev] || {})[p])); });
+  V.querySelectorAll("[data-lead]").forEach(b => b.onclick = () => { const ev = b.dataset.ev, u = b.dataset.lead; attOpen[ev] = true; act(() => db.setLeader(ev, u, !(state.leaders[ev] || {})[u])); });
+  V.querySelectorAll("[data-all]").forEach(b => b.onclick = () => { attOpen[b.dataset.all] = true; act(() => db.setAllAttendance(b.dataset.all, true), "Alle anwesend"); });
+  V.querySelectorAll("[data-none]").forEach(b => b.onclick = () => { attOpen[b.dataset.none] = true; act(() => db.setAllAttendance(b.dataset.none, false)); });
+}
 function viewTraining(id) {
   const isTpl = id.startsWith("tpl:");
   const t = isTpl ? state.templates.find(x => x.id === id.slice(4)) : state.trainings.find(x => x.id === id);
@@ -241,14 +263,7 @@ function viewTraining(id) {
      <div class="legend">${used.map(p => `<span><i style="background:var(${PH[p].c})"></i>${PH[p].t.replace("Hauptteil · ", "")}</span>`).join("")}</div>
    </section>
    ${isTpl ? `<p class="small muted card pad">Vorlage: So sieht ein Training aus, das du mit dieser Vorlage anlegst. Änderungen an einem einzelnen Training gelten nur für diesen Tag.</p>` : `
-   <section class="card pad stack">
-     <div class="sec-head"><h3>Anwesenheit</h3><span class="pill ${c ? "ok" : "open"}">${c}/${n} da</span></div>
-     <div class="attbar"><i style="width:${n ? c / n * 100 : 0}%"></i></div>
-     ${n ? `<details class="more" id="attd" ${(attOpen[t.id] ?? !c) ? "open" : ""}><summary>${c ? "Liste" : "Jetzt erfassen"}</summary>
-       <div class="att">${ap.slice().sort((x, y) => x.name.localeCompare(y.name, "de")).map(p => `<button data-att="${p.id}" aria-pressed="${!!a[p.id]}"><span class="dot">${a[p.id] ? "✓" : ""}</span><span>${esc(p.name)}</span></button>`).join("")}</div>
-       <div class="btnrow"><button class="btn ghost" data-all>Alle anwesend</button><button class="btn ghost" data-none>Zurücksetzen</button></div></details>`
-      : `<p class="small muted">Noch keine Kinder im Kader. Trage sie unter «Kader» ein.</p>`}
-   </section>
+   ${attSection(t.id)}
    <section class="card pad stack"><label for="note" class="lbl">Notiz zum Training</label>
      <textarea id="note" rows="2" placeholder="z. B. Halle B statt A, Bälle mitnehmen">${esc(t.note || "")}</textarea></section>`}
    ${t.blocks.map((b, i) => `<section class="phase" style="--pc:var(${PH[b.ph].c})"><div class="phase-h">${PH[b.ph].t}<span class="min">${b.min} Min.</span></div>${exCard(ex(b.ex), i, isTpl ? null : t, t.place === "hall" ? "hall" : "grass")}</section>`).join("")}
@@ -257,10 +272,7 @@ function viewTraining(id) {
   V.querySelector("[data-trpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.trainingPdf(t, isTpl));
   bindVideos();
   if (isTpl) return;
-  const dd = V.querySelector("#attd"); if (dd) dd.ontoggle = () => { attOpen[t.id] = dd.open; };
-  V.querySelectorAll("[data-att]").forEach(b => b.onclick = () => { attOpen[t.id] = true; const p = b.dataset.att; act(() => db.setAttendance(t.id, p, !a[p])); });
-  const all = V.querySelector("[data-all]"); if (all) all.onclick = () => { attOpen[t.id] = true; act(() => db.setAllAttendance(t.id, true), "Alle anwesend"); };
-  const none = V.querySelector("[data-none]"); if (none) none.onclick = () => { attOpen[t.id] = true; act(() => db.setAllAttendance(t.id, false)); };
+  bindAtt();
   V.querySelectorAll("[data-swap]").forEach(s => s.onchange = () => s.value && act(() => db.swapExercise(t.id, +s.dataset.swap, s.value), "Übung getauscht"));
   const note = V.querySelector("#note"); note.onchange = () => act(() => db.saveNote(t.id, note.value), "Notiz gespeichert");
   const del = V.querySelector("[data-deltr]");
@@ -386,14 +398,28 @@ function importBox() {
     <div class="stack" style="margin-top:10px"><p class="small">CSV-Export der Spielerliste aus Clubcorner wählen. Bestehende Kinder (gleiche Passnummer) werden aktualisiert, neue hinzugefügt.</p>
     <input type="file" id="ccfile" accept=".csv,text/csv" aria-label="Clubcorner-CSV"><p class="small" id="ccmsg" aria-live="polite"></p></div></details>`;
 }
+const ORT_KEY = "fcs-nds-ort";
+function ndsOrt() { try { return { ...db.NDS_ORT_DEFAULT, ...JSON.parse(localStorage.getItem(ORT_KEY) || "{}") }; } catch (e) { return { ...db.NDS_ORT_DEFAULT }; } }
 function ndsBox() {
-  const td = db.today(), from = td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01");
-  const r = db.ndsExport(from, td);
+  const td = db.today(), from = td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01"), ort = ndsOrt();
+  const r = db.ndsExport(from, td, ort);
+  const noNr = state.people.filter(p => p.user_id && !p.nds_id).map(p => p.display_name || p.email);
   return `<section class="card pad stack"><div class="sec-head"><h3>NDS-Export</h3><span class="note">J+S-Anwesenheit</span></div>
-    <p class="small">Erstellt eine CSV-Datei im Format der J+S-Anwesenheitsliste (NDS-Personen-ID, Datum, Aktivität-Typ, Anwesend) für alle Trainings mit erfasster Anwesenheit.</p>
-    <form class="inline" id="ndsx"><input id="nfrom" type="date" value="${from}" aria-label="Von"><input id="nto" type="date" value="${td}" aria-label="Bis"><button class="btn">CSV herunterladen</button></form>
-    <p class="small muted">Aktuell: ${r.trainings} Trainings mit Anwesenheit seit ${from.split("-").reverse().join(".")}.${r.missing.length ? ` Ohne NDS-Nr. (nicht im Export): ${r.missing.map(esc).join(", ")}.` : ""}</p></section>`;
+    <p class="small">Erstellt die CSV-Dateien genau nach den NDS-Vorlagen. Trainings gehen als «Training» (mit Zeit, Dauer, Ort), Turniere als «Wettkampf» (ohne Zeit, Dauer, Ort) hinaus.</p>
+    <form class="stack" id="ndsx">
+      <span class="lbl">Zeitraum</span>
+      <div class="frow"><input id="nfrom" type="date" value="${from}" aria-label="Von"><input id="nto" type="date" value="${td}" aria-label="Bis"></div>
+      <span class="lbl">Ort bei Trainings (Halle · Rasen)</span>
+      <div class="frow"><input id="ohall" value="${esc(ort.hall)}" aria-label="Ort Halle" placeholder="Ort Halle"><input id="ograss" value="${esc(ort.grass)}" aria-label="Ort Rasen" placeholder="Ort Rasen"></div>
+      <div class="btnrow"><button class="btn" data-kind="awk">Anwesenheiten (CSV)</button><button class="btn ghost" data-kind="akt">Aktivitäten (CSV)</button></div>
+    </form>
+    <p class="small muted">Aktuell seit ${from.split("-").reverse().join(".")}: ${r.trainings} Trainings und ${r.tournaments} Turniere mit Anwesenheit, ${r.kidRows} Kinder- und ${r.leaderRows} Leiter-Zeilen.${r.missing.length ? ` Kinder ohne NDS-Nr. (fehlen im Export): ${r.missing.map(esc).join(", ")}.` : ""}${noNr.length ? ` Trainer ohne NDS-Nr.: ${noNr.map(esc).join(", ")} (unten im Trainerteam eintragen).` : ""}</p>
+    <details class="more"><summary>So geht der Import in der NDS</summary><ol class="small ndsol">
+      <li>Die Aktivitäten (Trainings, Wettkämpfe) müssen im J+S-Kurs vorhanden sein, ebenso alle Kinder und Leiter/innen.</li>
+      <li>Fehlen Aktivitäten: «Aktivitäten (CSV)» in der NDS unter Aktivitäten importieren. <b>Achtung:</b> Dieser Import löscht alle bereits erfassten Aktivitäten <b>samt Anwesenheiten</b> im Kurs. Also nur einmal zu Beginn verwenden, sonst die fehlenden Aktivitäten von Hand erfassen.</li>
+      <li>Danach «Anwesenheiten (CSV)» importieren: Kurs öffnen → Reiter «Anwesenheitskontrolle» → «Aktionen» → «Anwesenheitskontrolle importieren». <b>Achtung:</b> Der Import überschreibt alle Anwesenheiten im Kurs. Darum immer den ganzen Zeitraum ab Kursbeginn exportieren, nie nur die neuen Trainings.</li></ol></details></section>`;
 }
+let ndsEd = null;
 function viewKader() {
   const td = db.today();
   const past = state.trainings.filter(t => t.date <= td && Object.keys(state.attendance[t.id] || {}).length);
@@ -428,7 +454,9 @@ function viewKader() {
    ${isAdmin() ? importBox() + ndsBox() : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span></span>
+      <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span>
+        ${p.user_id ? `<span>NDS-Nr.: ${p.nds_id ? esc(p.nds_id) : "<i>fehlt</i>"}${isAdmin() || p.user_id === state.user?.id ? ` · <button class="linkbtn" data-ndsed="${i}">${ndsEd === i ? "Schliessen" : "Eintragen"}</button>` : ""}</span>` : ""}
+        ${ndsEd === i ? `<form class="inline" data-ndsf="${i}" style="margin-top:6px"><input name="nr" inputmode="numeric" value="${esc(p.nds_id || "")}" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer"><button class="btn">Speichern</button></form>` : ""}</span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
       ${isAdmin() && p.pending ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
       ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
@@ -461,18 +489,25 @@ function viewKader() {
   const nx = V.querySelector("#ndsx");
   if (nx) nx.onsubmit = e => {
     e.preventDefault();
-    const r = db.ndsExport(V.querySelector("#nfrom").value, V.querySelector("#nto").value);
-    if (!r.rows) { toast("Keine erfassten Anwesenheiten im gewählten Zeitraum", true); return; }
+    const kind = e.submitter?.dataset.kind || "awk", f = V.querySelector("#nfrom").value, t = V.querySelector("#nto").value;
+    const ort = { hall: V.querySelector("#ohall").value.trim(), grass: V.querySelector("#ograss").value.trim() };
+    if (!ort.hall || !ort.grass) { toast("Bitte beide Orte ausfüllen – bei Trainings Pflicht", true); return; }
+    try { localStorage.setItem(ORT_KEY, JSON.stringify(ort)); } catch (x) {}
+    const r = kind === "akt" ? db.ndsActivities(f, t, ort) : db.ndsExport(f, t, ort);
+    if (kind === "awk" && !r.rows) { toast("Keine erfassten Anwesenheiten im gewählten Zeitraum", true); return; }
+    if (kind === "akt" && !r.trainings && !r.tournaments) { toast("Keine Trainings oder Turniere im gewählten Zeitraum", true); return; }
     const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = `NDS_Anwesenheit_${V.querySelector("#nfrom").value}_${V.querySelector("#nto").value}.csv`;
+    const a = document.createElement("a"); a.href = url; a.download = `${kind === "akt" ? "aktivitaeten" : "anwesenheitskontrolle"}_${f}_${t}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
-    toast(`${r.trainings} Trainings, ${r.rows} Zeilen exportiert`);
+    toast(kind === "akt" ? `${r.trainings} Trainings, ${r.tournaments} Wettkämpfe exportiert` : `${r.trainings} Trainings, ${r.tournaments} Turniere · ${r.rows} Zeilen exportiert`);
   };
   V.querySelectorAll("[data-off]").forEach(b => b.onclick = () => { editP = null; act(() => db.setPlayerActive(b.dataset.off, false), "Ausgetragen"); });
   V.querySelectorAll("[data-on]").forEach(b => b.onclick = () => act(() => db.setPlayerActive(b.dataset.on, true), "Wieder aufgenommen"));
   const inv = V.querySelector("#inv");
   if (inv) inv.onsubmit = e => { e.preventDefault(); const em = V.querySelector("#ie").value.trim().toLowerCase(); shareFor = em;
     act(() => db.inviteTrainer(em, V.querySelector("#iname").value.trim(), V.querySelector("#irole").value), "Freigeschaltet – jetzt Einladung senden"); };
+  V.querySelectorAll("[data-ndsed]").forEach(b => b.onclick = () => { ndsEd = ndsEd === +b.dataset.ndsed ? null : +b.dataset.ndsed; render(true); });
+  V.querySelectorAll("[data-ndsf]").forEach(f => f.onsubmit = e => { e.preventDefault(); const p = state.people[+f.dataset.ndsf]; ndsEd = null; act(() => db.setMemberNds(p.user_id, f.nr.value), "NDS-Nr. gespeichert"); });
   V.querySelectorAll("[data-share]").forEach(b => b.onclick = () => { const p = state.people[+b.dataset.share]; shareFor = shareFor === p.email ? null : p.email; render(true); });
   const cp = V.querySelector("[data-copy]");
   if (cp) cp.onclick = async () => { const ta = V.querySelector("#invtext");
@@ -488,23 +523,33 @@ function viewKader() {
 }
 
 /* ================= Turniere ================= */
+let tOpen = null;
+function tourRow(u) {
+  const d = dparts(u.date), c = attCount(u), open = tOpen === u.id;
+  return `<div class="row turn static">
+      <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m} ${String(d.y).slice(2)}</span></span>
+      <span class="mid"><b>${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${u.org || u.cat ? `<span>${[u.org && "Veranstalter: " + esc(u.org), esc(u.cat || "")].filter(Boolean).join(" · ")}</span>` : ""}
+        ${u.status !== "abgesagt" ? `<button class="linkbtn tattbtn" data-topen="${u.id}">${open ? "Anwesenheit schliessen" : c ? `Anwesenheit: ${c} Kinder` : "Anwesenheit erfassen"}</button>` : ""}</span>
+      <span class="stackr"><select class="stsel" data-st="${u.id}" aria-label="Status">${["eingeteilt", "angemeldet", "Warteliste", "abgesagt"].map(s => `<option ${s === u.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+        <button class="linkbtn" data-del="${u.id}">Löschen</button></span></div>
+      ${open ? `<div class="tatt">${attSection(u.id)}</div>` : ""}`;
+}
 function viewTurniere() {
   const td = db.today();
   const all = state.tournaments.slice().sort((a, b) => a.date.localeCompare(b.date));
-  const list = all.filter(u => u.date >= td);
+  const list = all.filter(u => u.date >= td), past = all.filter(u => u.date < td).reverse();
   const cnt = s => list.filter(u => u.status === s).length;
   V.innerHTML = `
    <div class="sec-head"><h2>Turniere</h2><span class="note">${cnt("eingeteilt") + cnt("angemeldet")} fix · ${cnt("Warteliste")} Warteliste</span></div>
-   <div class="card list">${list.map(u => { const d = dparts(u.date); return `<div class="row turn static">
-      <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m} ${String(d.y).slice(2)}</span></span>
-      <span class="mid"><b>${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${u.org || u.cat ? `<span>${[u.org && "Veranstalter: " + esc(u.org), esc(u.cat || "")].filter(Boolean).join(" · ")}</span>` : ""}</span>
-      <span class="stackr"><select class="stsel" data-st="${u.id}" aria-label="Status">${["eingeteilt", "angemeldet", "Warteliste", "abgesagt"].map(s => `<option ${s === u.status ? "selected" : ""}>${s}</option>`).join("")}</select>
-        <button class="linkbtn" data-del="${u.id}">Löschen</button></span></div>`; }).join("") || '<p class="empty">Keine kommenden Turniere.</p>'}</div>
+   <div class="card list">${list.map(tourRow).join("") || '<p class="empty">Keine kommenden Turniere.</p>'}</div>
+   ${past.length ? `<details class="card pad" ${past.some(u => u.id === tOpen) ? "open" : ""}><summary class="lbl">Vergangene Turniere (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(tourRow).join("")}</div></details>` : ""}
    <form class="inline card pad" id="addu"><input id="un" placeholder="Name des Turniers" required aria-label="Name"><input id="ud" type="date" required aria-label="Datum">
      <input id="ut" placeholder="Zeit, z. B. 10:00–12:00" aria-label="Zeit"><input id="uo" placeholder="Ort" aria-label="Ort">
      <select id="us" aria-label="Status"><option>angemeldet</option><option>eingeteilt</option><option>Warteliste</option></select><button class="btn">Turnier anlegen</button></form>`;
   V.querySelector("#addu").onsubmit = e => { e.preventDefault(); act(() => db.addTournament({ name: V.querySelector("#un").value.trim(), date: V.querySelector("#ud").value, time: V.querySelector("#ut").value.trim(), place: V.querySelector("#uo").value.trim() || "Ort offen", status: V.querySelector("#us").value }), "Turnier angelegt"); };
   V.querySelectorAll("[data-st]").forEach(s => s.onchange = () => act(() => db.setTournamentStatus(s.dataset.st, s.value), "Status gespeichert"));
+  V.querySelectorAll("[data-topen]").forEach(b => b.onclick = () => { tOpen = tOpen === b.dataset.topen ? null : b.dataset.topen; render(true); });
+  bindAtt();
   V.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     if (b.dataset.armed) act(() => db.deleteTournament(b.dataset.del), "Gelöscht");
     else { b.dataset.armed = 1; b.textContent = "Sicher? Nochmals tippen"; }
