@@ -854,6 +854,23 @@ function rulesSection() {
         <li>Shakehands nach jedem Spiel, Trainer in der Coachingzone, Eltern in der Zuschauerzone</li></ul></div>
     </div><p class="small muted">Zusammenfassung der Ausführungsbestimmungen Kat. E / FF12. Massgebend ist das Original-Dokument.</p></details>`;
 }
+
+/* Merkpunkte S. 52 als Bild-Kacheln */
+const MERK = [
+  ["Alle spielen mit", "Keine Ersatzspieler/innen.", '<circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3 19c.6-3.2 2.6-5 5-5s4.4 1.8 5 5M11 19c.6-3.2 2.6-5 5-5s4.4 1.8 5 5"/>'],
+  ["Jedes Kind ein Ball", "…und jedes Kind erzielt Tore.", '<circle cx="12" cy="12" r="8"/><path d="M12 7.5l3 2.2-1.1 3.5h-3.8L9 9.7z M12 4v3.5M15 9.7l3.6-1.2M13.9 13.2l2.3 3.2M10.1 13.2l-2.3 3.2M9 9.7L5.4 8.5"/>'],
+  ["Kleine Teams, viele Tore", "Garantieren Erfolgserlebnisse.", '<path d="M3 18V7h18v11"/><path d="M3 7l3 3h12l3-3M6 10v8M18 10v8M9 10v8M12 10v8M15 10v8"/>'],
+  ["Viel wiederholen", "Möglichst wenig Wartezeiten.", '<path d="M4 11a8 8 0 0 1 14-5l2 2M20 13a8 8 0 0 1-14 5l-2-2"/><path d="M20 4v4h-4M4 20v-4h4"/>'],
+  ["Dabeibleiben", "…statt ausscheiden.", '<path d="M12 20s-7-4.4-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5C19 15.6 12 20 12 20z"/>'],
+  ["Regeln gemeinsam", "Festlegen und einhalten.", '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4M8.5 10l1.6 1.6 3-3M8.5 16l1.6 1.6 3-3"/>'],
+  ["Alle helfen", "Beim Auf- und Abbau.", '<path d="M12 4l5 15H7z"/><path d="M5 19h14M9.5 12h5"/>'],
+  ["Hallo und Tschüss", "Alle begrüssen und verabschieden sich.", '<path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6 7-2.6 0-4.2-1.4-5.6-3.6L4 15a1.5 1.5 0 0 1 2.4-1.8L8 15"/>']
+];
+function merkpunkte() {
+  return `<div class="merk">${MERK.map(([t, d, ic], i) => `<div class="mk${i % 2 ? " alt" : ""}"><span class="mkn">${i + 1}</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg>
+    <b>${t}</b><span>${d}</span></div>`).join("")}</div>`;
+}
 function viewWissen() {
   const bar = p => `<div class="bar">${p.map(([c, f, m, l]) => `<div style="flex:${f};background:${c}"><b>${m}</b>${l}</div>`).join("")}</div>`;
   const R = "var(--red)", K = "#141414", G = "#7a7a7a", L = "#5a5a5a";
@@ -883,10 +900,28 @@ function viewWissen() {
      <div class="arrows"><div><b>Offen starten</b>Kinder tasten sich heran, lernen Ablauf und Regeln, probieren aus.</div><div><b>Üben</b>Fragen stellen, Lösungen anbieten, Qualität, beidseitig, viele Wiederholungen.</div><div><b>Wetteifern</b>«Wer kann?», «Wie viel schaffst du?», «Schaffst du es fehlerfrei?»</div></div></section>
    <section class="card pad"><h3>Rad der Variation <span class="muted small">S. 41</span></h3>${WHEEL_VAR}<p class="small muted">Übungen niveaugerecht erleichtern oder erschweren. Im Zentrum steht immer das Trainingsziel.</p></section>
    <section class="card pad"><h3>Motivationskreislauf <span class="muted small">S. 34</span></h3>${WHEEL_MOT}<p class="small muted">Das erste «L», das Lachen, bringt den Kreislauf zum Laufen.</p></section>
-   <section class="card pad"><h3>Merkpunkte <span class="muted small">S. 52</span></h3><ul class="plain">
-     <li>Alle Kinder spielen mit, keine Ersatzspieler/innen.</li><li>Jedes Kind hat (s)einen Ball und erzielt Tore.</li><li>Kleine Teams und viele Tore garantieren Erfolgserlebnisse.</li><li>Viele Wiederholungen, möglichst wenig Wartezeiten.</li><li>Dabeibleiben statt ausscheiden.</li><li>Regeln gemeinsam festlegen und einhalten.</li><li>Alle helfen beim Auf- und Abbau.</li><li>Alle begrüssen und verabschieden sich voneinander.</li></ul></section>`;
+   <section class="card pad"><h3>Merkpunkte <span class="muted small">S. 52</span></h3>${merkpunkte()}</section>`;
   bindDocs();
 }
+
+
+/* ================= Darstellung: Automatisch / Hell / Dunkel ================= */
+const THEMES_UI = { auto: ["Automatisch (wie Gerät)", '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>'],
+  light: ["Hell", '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>'],
+  dark: ["Dunkel", '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'] };
+function getTheme() { try { return localStorage.getItem("fcs-theme") || "auto"; } catch (e) { return "auto"; } }
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  const b = document.getElementById("themeBtn");
+  if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">${THEMES_UI[t][1]}</svg>`; b.title = "Darstellung: " + THEMES_UI[t][0]; b.setAttribute("aria-label", b.title + " – tippen zum Wechseln"); }
+}
+const themeBtn = document.getElementById("themeBtn");
+if (themeBtn) themeBtn.onclick = () => {
+  const order = ["auto", "light", "dark"], next = order[(order.indexOf(getTheme()) + 1) % 3];
+  try { localStorage.setItem("fcs-theme", next); } catch (e) {}
+  applyTheme(next); toast("Darstellung: " + THEMES_UI[next][0]);
+};
+applyTheme(getTheme());
 
 /* ================= Start ================= */
 db.onChange(() => render(true));
