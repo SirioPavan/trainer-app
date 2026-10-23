@@ -236,7 +236,7 @@ function planSerie(o) {
   const remove = o.replace ? inRange.filter(t => !hasAtt(t.id)) : [];
   const keep = state.trainings.filter(t => !remove.includes(t));
   const skip = new Set(o.skipT ? state.tournaments.filter(u => ["eingeteilt", "angemeldet"].includes(u.status)).map(u => u.date) : []);
-  const rows = generateSeries({ from: o.from, to: o.to, slots: o.slots, holidays: o.holidays, skip, themes: o.themes, exercises: state.exercises })
+  const rows = generateSeries({ from: o.from, to: o.to, slots: o.slots, holidays: o.holidays, skip, themes: o.themes, exercises: state.exercises, level: state.team.level })
     .filter(r => r.date >= db.today() && !keep.some(t => t.date === r.date && t.start === r.start_time));
   return { rows, remove };
 }
@@ -437,7 +437,7 @@ function viewTraining(id) {
 /* ================= Übungen ================= */
 let q = "", fph = "all", fpl = "all", libMode = "ex";
 function viewTemplates() {
-  const groups = [[{ G: "Vorlagen G-Junioren", F: "Vorlagen F-Junioren" }[state.team.level] || "Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
+  const groups = [[{ G: "Vorlagen G-Junioren", F: "Vorlagen F-Junioren", EW: "Vorlagen E-Juniorinnen und J+S-Manual" }[state.team.level] || "Eigene Planung (J+S-Manual)", state.templates.filter(t => !t.id.startsWith("tpl-sfv"))], ["SFV-Trainingskarten Kat. E", state.templates.filter(t => t.id.startsWith("tpl-sfv"))]];
   return groups.filter(g => g[1].length).map(([g, list]) => `<div class="sec-head"><h3>${esc(g)}</h3><span class="note">${list.length}</span></div>
     <div class="card list">${list.map(tp => `<button class="row" data-tpl="${tp.id}" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(tp.title)}</b><span>${esc(tp.thema)} · ${mins(tp)}' · ${tp.blocks.length} Übungen</span></span><span class="chev">›</span></button>`).join("")}</div>`).join("")
@@ -829,7 +829,7 @@ function rulesSection() {
         <li>Shakehands nach jedem Spiel</li>
         <li>Trainer und Wechselkinder in der Coachingzone, Eltern in der Zuschauerzone</li></ul></div>
     </div><p class="small muted">Zusammenfassung der Ausführungsbestimmungen Kat. G (football.ch). Massgebend ist das Original-Dokument.</p></details>`;
-  return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. E <span class="muted small">BRACK.CH play more football</span></h3></summary>
+  return `<details class="card pad rules"><summary><h3>Turnierregeln Kat. E${state.team.level === "EW" ? " / FF-12 (Juniorinnen)" : ""} <span class="muted small">BRACK.CH play more football</span></h3></summary>
     <div class="rgrid">
       <div class="rbox"><b>Kleinfeld 3 vs. 3</b><ul>
         <li>Feld 25–30 × 20–25 m, Mini-Tore</li><li>Spieldauer 8–10 Min.</li>

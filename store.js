@@ -9,9 +9,11 @@ let TEAM = CONFIG.teamId || "e-junioren";   // aktuelle Mannschaft – wird nach
 const TEAM_KEY = "fcs-trainer-team";
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD lokal
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.phase, name: e.name, page: e.page, levels: e.levels || null, team_id: e.team_id || null });
+const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.phase, name: e.name, page: e.page, levels: e.levels || null, team_id: e.team_id || null, also_teams: e.also_teams || null });
 // Übungen/Vorlagen der eigenen Stufe (G, F, E); eigene Übungen der Mannschaft immer. Ohne Stufe = E/F (bisherige Bibliothek)
-const forLevel = (x, lv) => x.team_id === TEAM || (x.levels?.length ? x.levels.includes(lv) : lv !== "G");
+// Eine Mannschaft kann mehrere Stufen sehen (z. B. E-Juniorinnen: E und G). Freigegebene Übungen anderer Mannschaften (also_teams) ebenfalls.
+const forLevel = (x, lv, lvs = [lv]) => x.team_id === TEAM || (x.also_teams || []).includes(TEAM) ||
+  (!x.team_id && (x.levels?.length ? x.levels.some(l => lvs.includes(l)) : lvs.some(l => l === "E" || l === "F")));
 
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
@@ -29,6 +31,7 @@ export async function init() {
   const qs = new URLSearchParams(location.search), forceDemo = qs.has("demo");
   const dq = (qs.get("demo") || "").toLowerCase();
   if (forceDemo && /^[fg]/.test(dq)) TEAM = dq[0] + "-junioren";
+  if (forceDemo && /^(w|ej|juniorinnen)/.test(dq)) TEAM = "e-juniorinnen";
   state.forced = forceDemo;
   if (!forceDemo && CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase) {
     state.mode = "cloud";
@@ -104,9 +107,10 @@ async function load() {
   if (!state.user) return;
   const from = new Date(Date.now() - 300 * 864e5).toLocaleDateString("sv-SE");   // ganze Saison
   // 1) Mitgliedschaften: welche Mannschaften darf diese Person sehen?
-  let m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level)").eq("user_id", state.user.id);
+  let m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level,levels)").eq("user_id", state.user.id);
+  if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level)").eq("user_id", state.user.id);
   if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name)").eq("user_id", state.user.id);   // vor 11_mannschaften.sql
-  state.teams = (m.data || []).map(x => ({ id: x.team_id, name: x.teams?.name || x.team_id, level: x.teams?.level || "E", role: x.role, display_name: x.display_name }))
+  state.teams = (m.data || []).map(x => ({ id: x.team_id, name: x.teams?.name || x.team_id, level: x.teams?.level || "E", levels: x.teams?.levels?.length ? x.teams.levels : [x.teams?.level || "E"], role: x.role, display_name: x.display_name }))
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
   let saved = null; try { saved = localStorage.getItem(TEAM_KEY); } catch (e) {}
   const pick = state.teams.find(t => t.id === saved) || state.teams.find(t => t.id === TEAM) || state.teams[0];
@@ -123,9 +127,9 @@ async function load() {
   const mine = state.teams.find(x => x.id === TEAM);
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
-  state.team = mine ? { id: mine.id, name: mine.name, level: mine.level } : { id: TEAM, name: "", level: "E" };
-  state.exercises = (ex.data || []).map(normEx).filter(x => forLevel(x, state.team.level));
-  state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level));
+  state.team = mine ? { id: mine.id, name: mine.name, level: mine.level, levels: mine.levels } : { id: TEAM, name: "", level: "E", levels: ["E"] };
+  state.exercises = (ex.data || []).map(normEx).filter(x => forLevel(x, state.team.level, state.team.levels));
+  state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.trainings = (tr.data || []).map(normT);
   state.tournaments = (tu.data || []).map(normU);
   state.players = pl.data || [];
@@ -195,11 +199,12 @@ function demoPlayers() {
   });
 }
 function demoPlayersG(lv = "G") {
-  const F = lv === "F", y0 = F ? 2018 : 2020;
-  const names = F ? ["Arian", "Lea", "Fynn", "Ella", "Luis", "Malia", "Noel", "Ida", "Gian", "Sara", "Levin", "Alva"] : ["Lio", "Mila", "Nael", "Ronja", "Tim", "Yara", "Elia", "Zoe", "Jan", "Nora"];
+  const F = lv === "F", W = lv === "EW", y0 = W ? 2016 : F ? 2018 : 2020;
+  const names = W ? ["Alina", "Bea", "Chiara", "Delia", "Elin", "Fiona", "Giulia", "Hanna", "Ines", "Julia", "Kim", "Livia"]
+    : F ? ["Arian", "Lea", "Fynn", "Ella", "Luis", "Malia", "Noel", "Ida", "Gian", "Sara", "Levin", "Alva"] : ["Lio", "Mila", "Nael", "Ronja", "Tim", "Yara", "Elia", "Zoe", "Jan", "Nora"];
   const last = ["Bühler", "Kunz", "Lang", "Moser", "Ott", "Roth", "Senn", "Vogt", "Wyss", "Egli", "Frey", "Hug"];
   return names.map((n, i) => ({ id: "d" + lv.toLowerCase() + i, name: n + " " + last[i], first_name: n, last_name: last[i], year: y0 + (i % 2), active: true,
-    birth_date: `${y0 + (i % 2)}-${String(1 + (i % 12)).padStart(2, "0")}-1${i % 9}`, nds_id: String((F ? 9600001 : 9500001) + i), street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
+    birth_date: `${y0 + (i % 2)}-${String(1 + (i % 12)).padStart(2, "0")}-1${i % 9}`, nds_id: String((W ? 9700001 : F ? 9600001 : 9500001) + i), street: "Beispielweg " + (i + 1), zip: "8442", city: "Hettlingen",
     guardian1_name: "Elternteil " + last[i], guardian1_phone: "+41 79 000 01 " + String(10 + i), guardian1_email: "eltern." + last[i].toLowerCase() + "@beispiel.ch", created_at: "2026-08-01T00:00:00" }));
 }
 function addDemoHistory(d) {
@@ -214,22 +219,24 @@ function addDemoHistory(d) {
   }
 }
 // Vorführung mit zwei getrennten Mannschaften: E (Beispieldaten) und G (leer gestartet, Plan automatisch erzeugt)
-const DEMO_TEAMS = [{ id: "e-junioren", name: "E-Junioren", level: "E", role: "admin" }, { id: "f-junioren", name: "F-Junioren", level: "F", role: "admin" }, { id: "g-junioren", name: "G-Junioren", level: "G", role: "admin" }];
+const DEMO_TEAMS = [{ id: "e-junioren", name: "E-Junioren", level: "E", role: "admin" }, { id: "f-junioren", name: "F-Junioren", level: "F", role: "admin" }, { id: "g-junioren", name: "G-Junioren", level: "G", role: "admin" }, { id: "e-juniorinnen", name: "E-Juniorinnen", level: "EW", levels: ["EW", "E", "G"], role: "admin" }];
 const demoKey = () => TEAM === "e-junioren" ? LS : LS + "-" + TEAM;
 function loadDemo() {
   if (!DEMO_TEAMS.some(t => t.id === TEAM)) TEAM = "e-junioren";
   const team = DEMO_TEAMS.find(t => t.id === TEAM);
-  state.team = { id: team.id, name: team.name, level: team.level }; state.teams = state.forced ? DEMO_TEAMS : [];
-  state.exercises = SEED.exercises.map(e => normEx({ ...e, team_id: null })).filter(x => forLevel(x, team.level));
-  state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time })).filter(x => forLevel(x, team.level));
+  const lvs = team.levels || [team.level];
+  state.team = { id: team.id, name: team.name, level: team.level, levels: lvs }; state.teams = state.forced ? DEMO_TEAMS : [];
+  state.exercises = SEED.exercises.map(e => normEx({ ...e, team_id: null })).filter(x => forLevel(x, team.level, lvs));
+  state.templates = SEED.templates.map(t => ({ ...t, start: t.start_time, end: t.end_time })).filter(x => forLevel(x, team.level, lvs));
   let d = null;
   try { d = JSON.parse(localStorage.getItem(demoKey())); } catch (e) {}
   if (!d && team.level !== "E") {
     const from = today(), to = new Date(Date.now() + 70 * 864e5).toLocaleDateString("sv-SE");
     const slots = team.level === "G" ? [{ wd: 3, start: "16:30", end: "17:30", place: "hall" }, { wd: 6, start: "09:00", end: "10:00", place: "hall" }]
+      : team.level === "EW" ? [{ wd: 1, start: "17:30", end: "19:00", place: "hall" }, { wd: 4, start: "17:30", end: "19:00", place: "hall" }]
       : [{ wd: 2, start: "17:00", end: "18:15", place: "hall" }, { wd: 5, start: "17:00", end: "18:15", place: "hall" }];
     d = { trainings: generateSeries({ from, to, slots,
-            themes: themesFor(team.level), exercises: state.exercises }).map(t => ({ ...t, id: uid() })),
+            themes: themesFor(team.level), exercises: state.exercises, level: team.level }).map(t => ({ ...t, id: uid() })),
           tournaments: [], players: state.forced ? demoPlayersG(team.level) : [], attendance: {}, people: [] };
   }
   if (!d) {
