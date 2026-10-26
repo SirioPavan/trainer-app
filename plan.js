@@ -57,7 +57,7 @@ export function generateSeries(opt) {
   const pools = {};
   const pool = (ph, place) => (pools[ph + place] ||= (() => {
     const all = exercises.filter(e => e.ph === ph);
-    const same = all.filter(e => e.place === place);
+    const same = all.filter(e => e.place === place || e.both);   // «both» = für Halle und Rasen geeignet
     return (same.length >= 2 ? same : all).slice().sort((a, b) => a.id.localeCompare(b.id));
   })());
   const used = {};   // Zähler pro Pool, damit sich Übungen abwechseln
@@ -78,7 +78,7 @@ export function generateSeries(opt) {
       const th = themes[n % themes.length], round = Math.floor(n / themes.length);
       const fav = (list, ph) => {
         const ok = (list || []).filter(id => byId[id] && byId[id].ph === ph);
-        const okPlace = ok.filter(id => byId[id].place === s.place);
+        const okPlace = ok.filter(id => byId[id].place === s.place || byId[id].both);
         const L = okPlace.length ? okPlace : ok;
         return L.length ? L[round % L.length] : null;
       };

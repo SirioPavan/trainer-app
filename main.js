@@ -337,8 +337,8 @@ function exCard(e, idx, t, surface) {
   // Tauschen: alle Übungen der Phase dieses Blocks (passender Untergrund zuerst), die aktuelle ist ausgewählt
   const bph = t ? (t.blocks[idx]?.ph || e.ph) : e.ph;
   const swapList = !t ? [] : state.exercises.filter(x => x.ph === bph || x.id === e.id)
-    .sort((x, y) => (x.place !== t.place) - (y.place !== t.place) || x.name.localeCompare(y.name, "de"));
-  const swapOpts = swapList.map(o => `<option value="${o.id}" ${o.id === e.id ? "selected" : ""}>${esc(o.name)} · ${PLACE[o.place]}</option>`).join("");
+    .sort((x, y) => (x.place !== t.place && !x.both) - (y.place !== t.place && !y.both) || x.name.localeCompare(y.name, "de"));
+  const swapOpts = swapList.map(o => `<option value="${o.id}" ${o.id === e.id ? "selected" : ""}>${esc(o.name)} · ${o.both ? "Halle/Rasen" : PLACE[o.place]}</option>`).join("");
   return `<article class="card ex">${e.d ? drawDiagram(surface ? { ...e.d, s: surface } : e.d) : ""}
     <div class="body">
       <div class="tr"><h3>${esc(e.name)}</h3>${e.page ? `<span class="pg">${/^\d/.test(e.page) ? "S. " : ""}${esc(e.page)}</span>` : ""}</div>
