@@ -468,3 +468,7 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .day[disabled]{cursor:default;opacity:.85}
 .btn.small{padding:6px 10px;font-size:13px}
 .ndsres p{margin:6px 0}
+
+.ndssteps{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.ndssteps li{display:grid;gap:4px}
+.ndssteps .btn{justify-self:start}

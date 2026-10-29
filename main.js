@@ -673,7 +673,12 @@ function ndsBox() {
       <div class="frow"><input id="nfrom" type="date" value="${from}" aria-label="Von"><input id="nto" type="date" value="${td}" aria-label="Bis"></div>
       <span class="lbl">Ort bei Trainings (Halle · Rasen)</span>
       <div class="frow"><input id="ohall" value="${esc(ort.hall)}" aria-label="Ort Halle" placeholder="Ort Halle"><input id="ograss" value="${esc(ort.grass)}" aria-label="Ort Rasen" placeholder="Ort Rasen"></div>
-      <div class="btnrow"><button class="btn" data-kind="awk">Anwesenheiten (CSV)</button><button class="btn ghost" data-kind="akt">Aktivitäten (CSV)</button></div>
+      <span class="lbl">Immer in dieser Reihenfolge exportieren und in der NDS importieren</span>
+      <ol class="ndssteps">
+        <li><button class="btn" data-kind="akt">1 · Aktivitäten (CSV)</button><span class="small muted">NDS: Kurs → «Aktivitäten» importieren. Ersetzt alle Trainings und Wettkämpfe im Kurs.</span></li>
+        <li><button class="btn" data-kind="awk">2 · Anwesenheiten (CSV)</button><span class="small muted">Erst danach. NDS: «Anwesenheitskontrolle» → «Aktionen» → «Anwesenheitskontrolle importieren».</span></li>
+      </ol>
+      <p class="small muted">Beide Male denselben Zeitraum ab Kursbeginn wählen. Sind die Aktivitäten schon in der NDS und unverändert, genügt Schritt 2.</p>
     </form>
     <p class="small muted">Aktuell seit ${from.split("-").reverse().join(".")}: ${r.trainings} Trainings und ${r.tournaments} Turniere mit Anwesenheit, ${r.kidRows} Kinder- und ${r.leaderRows} Leiter-Zeilen.${r.missing.length ? ` Kinder ohne NDS-Nr. (fehlen im Export): ${r.missing.map(esc).join(", ")}.` : ""}${noNr.length ? ` Trainer ohne NDS-Nr.: ${noNr.map(esc).join(", ")} (unten im Trainerteam eintragen).` : ""}</p>
     <details class="more" ${ndsP ? "open" : ""}><summary>NDS-Personennummern übernehmen</summary>
@@ -689,7 +694,7 @@ function ndsBox() {
       </div></details>
     <details class="more"><summary>So geht der Import in der NDS</summary><ol class="small ndsol">
       <li>Die Aktivitäten (Trainings, Wettkämpfe) müssen im J+S-Kurs vorhanden sein, ebenso alle Kinder und Leiter/innen.</li>
-      <li>Fehlen Aktivitäten: «Aktivitäten (CSV)» in der NDS unter Aktivitäten importieren. <b>Achtung:</b> Dieser Import löscht alle bereits erfassten Aktivitäten <b>samt Anwesenheiten</b> im Kurs. Also nur einmal zu Beginn verwenden, sonst die fehlenden Aktivitäten von Hand erfassen.</li>
+      <li><b>Zuerst</b> «Aktivitäten (CSV)» in der NDS unter Aktivitäten importieren. Dieser Import ersetzt alle Aktivitäten im Kurs <b>samt Anwesenheiten</b>. Deshalb müssen in der App alle Trainings und Turniere ab Kursbeginn stehen.</li>
       <li>Danach «Anwesenheiten (CSV)» importieren: Kurs öffnen → Reiter «Anwesenheitskontrolle» → «Aktionen» → «Anwesenheitskontrolle importieren». <b>Achtung:</b> Der Import überschreibt alle Anwesenheiten im Kurs. Darum immer den ganzen Zeitraum ab Kursbeginn exportieren, nie nur die neuen Trainings.</li></ol></details></section>`;
 }
 let ndsEd = null;
