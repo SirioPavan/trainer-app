@@ -147,6 +147,7 @@ function viewDashboard() {
   const items = [...(filt !== "tour" ? list.map(x => ({ k: "t", date: x.date, o: x })) : []), ...(filt !== "train" ? state.tournaments.filter(u => u.date >= td).map(x => ({ k: "u", date: x.date, o: x })) : [])]
     .sort((a, b) => a.date.localeCompare(b.date) || (a.k === "u" ? 1 : -1));
   const vis = showAll ? items : items.slice(0, 12);
+  const past = state.trainings.filter(t => t.date < td).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
   const n = next && dparts(next.date);
   V.innerHTML = `
    ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? `Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden. <a href="${location.origin + location.pathname}" class="demolink">Zur echten App mit Login →</a>` : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
@@ -163,15 +164,18 @@ function viewDashboard() {
      ${[["all", "Alles"], ["train", "Trainings"], ["tour", "Turniere"]].map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filt === k}">${l}</button>`).join("")}</div>
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
+   ${past.length ? `<details class="card pad" ${pastOpen ? "open" : ""} data-pastbox><summary class="lbl">Vergangene Trainings (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(rowT).join("")}</div></details>` : ""}
    ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
+  const pb = V.querySelector("[data-pastbox]"); if (pb) pb.ontoggle = () => { pastOpen = pb.open; };
   const mb = V.querySelector("[data-more]"); if (mb) mb.onclick = () => { showAll = !showAll; render(true); };
   V.querySelector("[data-planpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.planPdf());
   if (isAdmin()) bindPlanBox();
 }
 /* ================= Trainingsplanung in der App ================= */
+let pastOpen = false;
 let planMode = "serie", planArmed = null, planMsg = "", planOpen = null, planVals = null, planPending = null;
 const HOL_KEY = () => "fcs-hol-" + state.team.id;
 const DEF_HOL = [["2026-12-19", "2027-01-03"], ["2027-02-06", "2027-02-21"], ["", ""], ["", ""]];
