@@ -443,3 +443,27 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .mkn{position:absolute;top:8px;right:10px;font-family:var(--display);font-weight:800;font-size:22px;color:var(--line);line-height:1}
 .top .club{overflow:hidden;text-overflow:ellipsis}
 .chkrow .chk{flex:0 1 auto}
+
+/* Trainer-Einsatz */
+.crew{display:inline-block;margin-top:3px;font-size:12px;font-weight:700;color:var(--muted)}
+.crew.low{color:var(--red-ink)}
+.row .mid .crew{display:block}
+.crewlist{display:flex;flex-direction:column}
+.crewrow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.crewrow:first-child{border-top:0}
+.crewrow .mid b{display:block}
+.crewrow .mid span{font-size:13px;color:var(--muted)}
+.crewst{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;background:var(--line)}
+.crewst.ok{background:var(--ok)}.crewst.wait{background:var(--warn)}.crewst.bad{background:var(--red)}.crewst.none{color:var(--muted)}
+.avbtns{display:flex;gap:4px}
+.avbtns button{width:34px;height:32px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+.avbtns button[aria-pressed="true"][data-av="yes"]{background:var(--ok);border-color:var(--ok);color:#fff}
+.avbtns button[aria-pressed="true"][data-av="maybe"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.avbtns button[aria-pressed="true"][data-av="no"]{background:var(--red);border-color:var(--red);color:#fff}
+.crewnote{margin:0 0 8px 38px;border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--surface);width:calc(100% - 38px)}
+.pill.bad{background:var(--red);color:#fff}
+.days{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-top:4px;font-size:12px;color:var(--muted)}
+.day{border:1.5px solid var(--line);background:var(--surface);border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)}
+.day[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.day[disabled]{cursor:default;opacity:.85}
+.btn.small{padding:6px 10px;font-size:13px}

@@ -294,18 +294,56 @@ function bindPlanBox() {
   if (ft) ft.onsubmit = e => { e.preventDefault(); act(() => db.addTraining(V.querySelector("#tdate").value, V.querySelector("#ttpl").value), "Training angelegt"); };
 }
 
+
+/* ================= Trainer-Einsatz ================= */
+const AV = { yes: ["✓", "dabei", "ok"], maybe: ["?", "unsicher", "wait"], no: ["✗", "abwesend", "bad"] };
+const crewOn = () => state.people.some(p => p.default_days?.length) || Object.keys(state.avail || {}).length > 0;
+// Wer ist bei diesem Termin dabei? Ausdrückliche Angabe vor Einsatztag
+function crew(ev) {
+  const wd = new Date(ev.date + "T12:00:00").getDay(), av = (state.avail || {})[ev.id] || {};
+  return state.people.map(p => { const o = p.user_id ? av[p.user_id] : null, planned = (p.default_days || []).includes(wd);
+    return { p, planned, st: o?.status || (planned ? "yes" : null), note: o?.note || "", own: !!o }; });
+}
+const crewYes = ev => crew(ev).filter(c => c.st === "yes").length;
+function crewChip(ev) {
+  if (!crewOn() || ev.date < db.today() || ev.status === "abgesagt") return "";
+  const n = crewYes(ev), min = state.team.minTrainers ?? 2;
+  return `<span class="crew ${n < min ? "low" : ""}" title="Trainer dabei">👥 ${n}${n < min ? ` · ${n === 0 ? "kein Trainer" : n === 1 ? "nur 1 Trainer" : "nur " + n + " Trainer"}!` : ""}</span>`;
+}
+function crewSection(ev) {
+  const list = crew(ev), n = list.filter(c => c.st === "yes").length, min = state.team.minTrainers ?? 2, me = state.user?.id;
+  if (!state.people.length) return "";
+  return `<section class="card pad stack crewbox">
+    <div class="sec-head"><h3>Trainer-Einsatz</h3><span class="pill ${n < min ? "bad" : "ok"}">${n} dabei${n < min ? " · zu wenig" : ""}</span></div>
+    <div class="crewlist">${list.map(c => { const mine = c.p.user_id && c.p.user_id === me, edit = c.p.user_id && (mine || isAdmin());
+      return `<div class="crewrow">
+        <span class="crewst ${c.st ? AV[c.st][2] : "none"}">${c.st ? AV[c.st][0] : "–"}</span>
+        <span class="mid"><b>${esc(c.p.display_name || c.p.email)}${mine ? " (ich)" : ""}</b>
+          <span>${c.st ? AV[c.st][1] : "nicht eingeteilt"}${c.planned ? " · Einsatztag" : ""}${c.note ? " · «" + esc(c.note) + "»" : ""}${c.p.pending ? " · noch nicht angemeldet" : ""}</span></span>
+        ${edit ? `<span class="avbtns">${["yes", "maybe", "no"].map(k => `<button data-av="${k}" data-ev="${ev.id}" data-u="${c.p.user_id}" aria-pressed="${c.st === k}" title="${AV[k][1]}">${AV[k][0]}</button>`).join("")}${c.own ? `<button data-av="" data-ev="${ev.id}" data-u="${c.p.user_id}" title="zurück zum Einsatztag">↺</button>` : ""}</span>` : ""}
+      </div>${mine && c.st && c.st !== "yes" || mine && c.own ? `<input class="crewnote" data-avnote="${ev.id}" data-u="${c.p.user_id}" value="${esc(c.note)}" placeholder="Notiz, z. B. komme 15 Min. später">` : ""}`; }).join("")}</div>
+  </section>`;
+}
+function bindCrew() {
+  V.querySelectorAll("[data-av]").forEach(b => b.onclick = () => act(() => db.setAvail(b.dataset.ev, b.dataset.u, b.dataset.av || null), b.dataset.av ? "Eingetragen: " + AV[b.dataset.av][1] : "Zurück zum Einsatztag"));
+  V.querySelectorAll("[data-avnote]").forEach(i => i.onchange = () => { const cur = (state.avail[i.dataset.avnote] || {})[i.dataset.u];
+    const ev = state.trainings.find(t => t.id === i.dataset.avnote) || state.tournaments.find(u => u.id === i.dataset.avnote);
+    const st = cur?.status || (crew(ev).find(c => c.p.user_id === i.dataset.u)?.st) || "yes";
+    act(() => db.setAvail(i.dataset.avnote, i.dataset.u, st, i.value.trim()), "Notiz gespeichert"); });
+}
+
 function rowT(t) {
   const d = dparts(t.date), c = attCount(t), n = activePlayers().length, clash = state.tournaments.filter(u => u.date === t.date && u.status !== "abgesagt");
   return `<button class="row" data-open="${t.id}">
     <span class="date"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m}</span></span>
-    <span class="mid"><b>Training · ${esc(t.thema)}</b><span>${t.start}–${t.end} · <span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> · ${mins(t)}'</span>${clash.length ? `<span class="warnline">Gleicher Tag: ${esc(clash[0].name)} (${clash[0].status})</span>` : ""}</span>
+    <span class="mid"><b>Training · ${esc(t.thema)}</b><span>${t.start}–${t.end} · <span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> · ${mins(t)}'</span>${clash.length ? `<span class="warnline">Gleicher Tag: ${esc(clash[0].name)} (${clash[0].status})</span>` : ""}${crewChip(t)}</span>
     <span class="pill ${c ? "ok" : "open"}">${c ? c + "/" + n : "offen"}</span></button>`;
 }
 function rowU(u) {
   const d = dparts(u.date);
   return `<button class="row turn" data-u="${u.id}">
     <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m}</span></span>
-    <span class="mid"><b>${/^turnier/i.test(u.name) ? "" : "Turnier · "}${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span></span>
+    <span class="mid"><b>${/^turnier/i.test(u.name) ? "" : "Turnier · "}${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${crewChip(u)}</span>
     <span class="pill ${ST[u.status] || "open"}">${esc(u.status)}</span></button>`;
 }
 
@@ -367,11 +405,17 @@ function attSection(id) {
      ${n ? `<details class="more" data-attd="${id}" ${(attOpen[id] ?? !c) ? "open" : ""}><summary>${c ? "Liste" : "Jetzt erfassen"}</summary>
        <div class="att">${ap.slice().sort((x, y) => x.name.localeCompare(y.name, "de")).map(p => chip("data-att", p.id, a[p.id], p.name)).join("")}</div>
        <div class="btnrow"><button class="btn ghost" data-all="${id}">Alle anwesend</button><button class="btn ghost" data-none="${id}">Zurücksetzen</button></div>
+       ${L.length && !lc && crewOn() ? (() => { const evo = state.trainings.find(t => t.id === id) || state.tournaments.find(u => u.id === id); const k = evo ? crew(evo).filter(c => c.st === "yes" && c.p.user_id).length : 0;
+         return k ? `<button class="btn ghost small" data-leadplan="${id}">Eingeplante Trainer (${k}) als anwesend übernehmen</button>` : ""; })() : ""}
        ${L.length ? `<p class="lbl attl">Leiter/innen</p><div class="att">${L.map(p => chip("data-lead", p.user_id, la[p.user_id], p.display_name || p.email)).join("")}</div>` : ""}</details>`
       : `<p class="small muted">Noch keine Kinder im Kader. Trage sie unter «Kader» ein.</p>`}
    </section>`;
 }
 function bindAtt() {
+  bindCrew();
+  V.querySelectorAll("[data-leadplan]").forEach(b => b.onclick = () => { const ev = b.dataset.leadplan; attOpen[ev] = true;
+    const evo = state.trainings.find(t => t.id === ev) || state.tournaments.find(u => u.id === ev);
+    act(async () => { for (const c of crew(evo).filter(c => c.st === "yes" && c.p.user_id)) await db.setLeader(ev, c.p.user_id, true); }, "Eingeplante Trainer übernommen"); });
   V.querySelectorAll("[data-attd]").forEach(d => d.ontoggle = () => { attOpen[d.dataset.attd] = d.open; });
   V.querySelectorAll("[data-att]").forEach(b => b.onclick = () => { const ev = b.dataset.ev, p = b.dataset.att; attOpen[ev] = true; act(() => db.setAttendance(ev, p, !(state.attendance[ev] || {})[p])); });
   V.querySelectorAll("[data-lead]").forEach(b => b.onclick = () => { const ev = b.dataset.ev, u = b.dataset.lead; attOpen[ev] = true; act(() => db.setLeader(ev, u, !(state.leaders[ev] || {})[u])); });
@@ -404,6 +448,7 @@ function viewTraining(id) {
      <div class="legend">${used.map(p => `<span><i style="background:var(${PH[p].c})"></i>${PH[p].t.replace("Hauptteil · ", "")}</span>`).join("")}</div>
    </section>
    ${isTpl ? `<p class="small muted card pad">Vorlage: So sieht ein Training aus, das du mit dieser Vorlage anlegst. Änderungen an einem einzelnen Training gelten nur für diesen Tag.</p>` : `
+   ${crewSection(t)}
    ${attSection(t.id)}
    <section class="card pad stack"><label for="note" class="lbl">Notiz zum Training</label>
      <textarea id="note" rows="2" placeholder="z. B. Halle B statt A, Bälle mitnehmen">${esc(t.note || "")}</textarea></section>`}
@@ -668,11 +713,22 @@ function viewKader() {
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span>
         ${p.user_id ? `<span>NDS-Nr.: ${p.nds_id ? esc(p.nds_id) : "<i>fehlt</i>"}${isAdmin() || p.user_id === state.user?.id ? ` · <button class="linkbtn" data-ndsed="${i}">${ndsEd === i ? "Schliessen" : "Eintragen"}</button>` : ""}</span>` : ""}
+        ${(() => { const can = isAdmin() || (p.user_id && p.user_id === state.user?.id), D = [1, 2, 3, 4, 5, 6, 0], dn = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+          return `<span class="days" aria-label="Einsatztage">Einsatz: ${D.map(d => `<button class="day" ${can ? "" : "disabled"} data-pday="${i}" data-d="${d}" aria-pressed="${(p.default_days || []).includes(d)}">${dn[d]}</button>`).join("")}</span>`; })()}
         ${ndsEd === i ? `<form class="inline" data-ndsf="${i}" style="margin-top:6px"><input name="nr" inputmode="numeric" value="${esc(p.nds_id || "")}" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer"><button class="btn">Speichern</button></form>` : ""}</span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
       ${isAdmin() && p.pending ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
       ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
       ${shareFor === p.email ? shareBox(p) : ""}`).join("")}</div>
+   <section class="card pad stack planf">
+     <h3>Einsatz und Abwesenheiten</h3>
+     <p class="small muted">Einsatztage oben bei jeder Person antippen (z. B. Mi und Sa). An diesen Tagen gilt man als «dabei». Abweichungen trägt jede/r im Training oder Turnier selbst ein, oder hier für einen ganzen Zeitraum.</p>
+     ${state.user?.id && state.people.some(p => p.user_id === state.user.id) ? `<form class="stack" id="absf"><span class="lbl">Ich bin abwesend</span>
+       <div class="frow"><input type="date" name="from" required aria-label="von"><input type="date" name="to" required aria-label="bis"></div>
+       <input name="note" placeholder="Grund (optional), z. B. Ferien"><button class="btn ghost">Abwesenheit eintragen</button></form>` : ""}
+     ${isAdmin() ? `<form class="stack" id="minf"><span class="lbl">Warnung, wenn weniger Trainer dabei sind als</span>
+       <div class="frow"><input type="number" name="n" min="0" max="10" value="${state.team.minTrainers ?? 2}" aria-label="Mindestanzahl Trainer"><button class="btn ghost">Speichern</button></div></form>` : ""}
+   </section>
    ${isAdmin() ? `<form class="inline card pad" id="inv">
       <input id="ie" type="email" required placeholder="E-Mail der Trainerin / des Trainers" aria-label="E-Mail">
       <input id="iname" placeholder="Name" aria-label="Name">
@@ -718,6 +774,13 @@ function viewKader() {
   const inv = V.querySelector("#inv");
   if (inv) inv.onsubmit = e => { e.preventDefault(); const em = V.querySelector("#ie").value.trim().toLowerCase(); shareFor = em;
     act(() => db.inviteTrainer(em, V.querySelector("#iname").value.trim(), V.querySelector("#irole").value), "Freigeschaltet – jetzt Einladung senden"); };
+  V.querySelectorAll("[data-pday]").forEach(b => b.onclick = () => { const p = state.people[+b.dataset.pday], d = +b.dataset.d, cur = p.default_days || [];
+    act(() => db.setMemberDays(p, cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d].sort()), "Einsatztage gespeichert"); });
+  const af = V.querySelector("#absf");
+  if (af) af.onsubmit = e => { e.preventDefault(); if (af.to.value < af.from.value) { toast("«bis» liegt vor «von»", true); return; }
+    act(async () => { const k = await db.setAbsence(state.user.id, af.from.value, af.to.value, af.note.value.trim()); toast(k ? `Abwesend bei ${k} Terminen eingetragen` : "Keine Termine in diesem Zeitraum"); }); };
+  const mf = V.querySelector("#minf");
+  if (mf) mf.onsubmit = e => { e.preventDefault(); act(() => db.setMinTrainers(Math.max(0, +mf.n.value || 0)), "Gespeichert"); };
   V.querySelectorAll("[data-ndsed]").forEach(b => b.onclick = () => { ndsEd = ndsEd === +b.dataset.ndsed ? null : +b.dataset.ndsed; render(true); });
   V.querySelectorAll("[data-ndsf]").forEach(f => f.onsubmit = e => { e.preventDefault(); const p = state.people[+f.dataset.ndsf]; ndsEd = null; act(() => db.setMemberNds(p.user_id, f.nr.value), "NDS-Nr. gespeichert"); });
   V.querySelectorAll("[data-share]").forEach(b => b.onclick = () => { const p = state.people[+b.dataset.share]; shareFor = shareFor === p.email ? null : p.email; render(true); });
@@ -741,7 +804,7 @@ function tourRow(u) {
   return `<div class="row turn static">
       <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m} ${String(d.y).slice(2)}</span></span>
       <span class="mid"><b>${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${u.org || u.cat ? `<span>${[u.org && "Veranstalter: " + esc(u.org), esc(u.cat || "")].filter(Boolean).join(" · ")}</span>` : ""}
-        ${u.status !== "abgesagt" ? `<button class="linkbtn tattbtn" data-topen="${u.id}">${open ? "Anwesenheit schliessen" : c ? `Anwesenheit: ${c} Kinder` : "Anwesenheit erfassen"}</button>` : ""}</span>
+        ${crewChip(u)}${u.status !== "abgesagt" ? `<button class="linkbtn tattbtn" data-topen="${u.id}">${open ? "Schliessen" : c ? `Trainer & Anwesenheit: ${c} Kinder` : "Trainer & Anwesenheit"}</button>` : ""}</span>
       <span class="stackr">${isAdmin() ? `<select class="stsel" data-st="${u.id}" aria-label="Status">${["eingeteilt", "angemeldet", "Warteliste", "abgesagt"].map(s => `<option ${s === u.status ? "selected" : ""}>${s}</option>`).join("")}</select>
         <button class="linkbtn" data-tedit="${u.id}">${tEdit === u.id ? "Schliessen" : "Bearbeiten"}</button>
         <button class="linkbtn" data-del="${u.id}">Löschen</button>` : `<span class="pill ${ST[u.status] || "open"}">${esc(u.status)}</span>`}</span></div>
@@ -751,7 +814,7 @@ function tourRow(u) {
         <div class="frow"><input name="place" value="${esc(u.place || "")}" placeholder="Ort" aria-label="Ort"><input name="org" value="${esc(u.org || "")}" placeholder="Veranstalter" aria-label="Veranstalter"></div>
         <input name="cat" value="${esc(u.cat || "")}" placeholder="Kategorie / Stärkeklasse" aria-label="Kategorie">
         <button class="btn">Speichern</button></form>` : ""}
-      ${open ? `<div class="tatt">${attSection(u.id)}</div>` : ""}`;
+      ${open ? `<div class="tatt">${crewSection(u)}${attSection(u.id)}</div>` : ""}`;
 }
 function viewTurniere() {
   const td = db.today();

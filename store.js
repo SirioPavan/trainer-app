@@ -18,7 +18,7 @@ const forLevel = (x, lv, lvs = [lv]) => x.team_id === TEAM || (x.also_teams || [
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
   mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren", level: "E" }, teams: [],
-  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, leaders: {}, people: [], documents: [], docUrls: {}, links: []
+  exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, leaders: {}, avail: {}, people: [], documents: [], docUrls: {}, links: []
 };
 
 let sb = null;
@@ -107,10 +107,11 @@ async function load() {
   if (!state.user) return;
   const from = new Date(Date.now() - 300 * 864e5).toLocaleDateString("sv-SE");   // ganze Saison
   // 1) Mitgliedschaften: welche Mannschaften darf diese Person sehen?
-  let m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level,levels)").eq("user_id", state.user.id);
+  let m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level,levels,min_trainers)").eq("user_id", state.user.id);
+  if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level,levels)").eq("user_id", state.user.id);
   if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name,level)").eq("user_id", state.user.id);
   if (m.error) m = await sb.from("team_members").select("role,display_name,team_id,teams(name)").eq("user_id", state.user.id);   // vor 11_mannschaften.sql
-  state.teams = (m.data || []).map(x => ({ id: x.team_id, name: x.teams?.name || x.team_id, level: x.teams?.level || "E", levels: x.teams?.levels?.length ? x.teams.levels : [x.teams?.level || "E"], role: x.role, display_name: x.display_name }))
+  state.teams = (m.data || []).map(x => ({ id: x.team_id, name: x.teams?.name || x.team_id, level: x.teams?.level || "E", levels: x.teams?.levels?.length ? x.teams.levels : [x.teams?.level || "E"], minTrainers: x.teams?.min_trainers ?? 2, role: x.role, display_name: x.display_name }))
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
   let saved = null; try { saved = localStorage.getItem(TEAM_KEY); } catch (e) {}
   const pick = state.teams.find(t => t.id === saved) || state.teams.find(t => t.id === TEAM) || state.teams[0];
@@ -127,7 +128,7 @@ async function load() {
   const mine = state.teams.find(x => x.id === TEAM);
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
-  state.team = mine ? { id: mine.id, name: mine.name, level: mine.level, levels: mine.levels } : { id: TEAM, name: "", level: "E", levels: ["E"] };
+  state.team = mine ? { id: mine.id, name: mine.name, level: mine.level, levels: mine.levels, minTrainers: mine.minTrainers } : { id: TEAM, name: "", level: "E", levels: ["E"], minTrainers: 2 };
   state.exercises = (ex.data || []).map(normEx).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.trainings = (tr.data || []).map(normT);
@@ -145,6 +146,10 @@ async function load() {
     const { data, error } = await sb.from("tournament_attendance").select("*").in("tournament_id", tid);
     if (!error) (data || []).forEach(a => { (state.attendance[a.tournament_id] ||= {})[a.player_id] = a.present; });
   }
+  // Trainer-Einsatz (Tabelle ab 20_trainer_einsatz.sql)
+  state.avail = {};
+  { const { data, error } = await sb.from("trainer_availability").select("event_id,user_id,status,note").eq("team_id", TEAM);
+    if (!error) (data || []).forEach(a => { (state.avail[a.event_id] ||= {})[a.user_id] = { status: a.status, note: a.note || "" }; }); }
   state.leaders = {};
   { const { data, error } = await sb.from("leader_attendance").select("event_id,user_id,present").eq("team_id", TEAM);
     if (!error) (data || []).forEach(a => { (state.leaders[a.event_id] ||= {})[a.user_id] = a.present; }); }
@@ -171,7 +176,7 @@ const normU = u => ({ ...u, time: u.time_text, org: u.organizer, cat: u.category
 let timer = null;
 function subscribeLive() {
   const ch = sb.channel("team-" + TEAM);
-  ["attendance", "trainings", "tournaments", "players", "tournament_attendance", "leader_attendance"].forEach(table =>
+  ["attendance", "trainings", "tournaments", "players", "tournament_attendance", "leader_attendance", "trainer_availability"].forEach(table =>
     ch.on("postgres_changes", { event: "*", schema: "public", table }, () => {
       clearTimeout(timer); timer = setTimeout(() => load().then(emit), 400);
     }));
@@ -248,13 +253,14 @@ function loadDemo() {
     };
   }
   // Vorführ-Trainerteam (mit erfundenen NDS-Nummern)
-  if (!d.people?.length || !d.people[0].user_id) d.people = [
-    { user_id: "demo-u1", email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false, nds_id: "9100001" },
-    { user_id: "demo-u2", email: "assistenz@verein.ch", role: "trainer", display_name: "Assistenz (Demo)", pending: false, nds_id: "" }];
+  if (!d.people?.length || !d.people[0].user_id || !d.people[0].default_days) d.people = [
+    { user_id: "demo-u1", email: "du@verein.ch", role: "admin", display_name: "Du (Demo)", pending: false, nds_id: "9100001", default_days: [3] },
+    { user_id: "demo-u2", email: "assistenz@verein.ch", role: "trainer", display_name: "Assistenz (Demo)", pending: false, nds_id: "", default_days: [3, 6] },
+    { user_id: "demo-u3", email: "trainer3@verein.ch", role: "trainer", display_name: "Trainer 3 (Demo)", pending: false, nds_id: "", default_days: [6] }];
   if (state.forced && team.level === "E" && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
-  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.role = "admin"; state.links = d.links || [];
+  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.avail = d.avail || {}; state.team.minTrainers = d.minTrainers ?? 2; state.role = "admin"; state.links = d.links || [];
   demoOwn = d.ownEx || []; demoOwn.forEach(r => state.exercises.push(normEx(r)));
   state.user = { email: "demo", id: "demo-u1" };
 }
@@ -262,7 +268,7 @@ function saveDemo() {
   try {
     localStorage.setItem(demoKey(), JSON.stringify({
       trainings: state.trainings, players: state.players, attendance: state.attendance,
-      people: state.people, links: state.links, leaders: state.leaders, ownEx: demoOwn,
+      people: state.people, links: state.links, leaders: state.leaders, ownEx: demoOwn, avail: state.avail, minTrainers: state.team.minTrainers,
       tournaments: state.tournaments.map(u => ({ ...u, time_text: u.time, organizer: u.org, category: u.cat }))
     }));
   } catch (e) {}
@@ -293,6 +299,32 @@ export async function setLeader(eventId, userId, present) {
   if (state.mode === "demo") return saveDemo();
   if (present) await run(sb.from("leader_attendance").upsert({ team_id: TEAM, event_id: eventId, user_id: userId, present: true }));
   else await run(sb.from("leader_attendance").delete().eq("event_id", eventId).eq("user_id", userId));
+}
+// Trainer-Einsatz: status "yes" | "maybe" | "no", null = zurück zur Einsatzplanung (Einsatztage)
+export async function setAvail(eventId, userId, status, note) {
+  const ev = (state.avail[eventId] ||= {});
+  if (!status) delete ev[userId]; else ev[userId] = { status, note: note ?? ev[userId]?.note ?? "" };
+  if (state.mode === "demo") return saveDemo();
+  if (!status) await run(sb.from("trainer_availability").delete().eq("event_id", eventId).eq("user_id", userId));
+  else await run(sb.from("trainer_availability").upsert({ team_id: TEAM, event_id: eventId, user_id: userId, status, note: ev[userId].note || null }));
+}
+// Abwesenheit von–bis: alle Trainings und Turniere in diesem Zeitraum auf «abwesend»
+export async function setAbsence(userId, from, to, note) {
+  const ids = [...state.trainings.filter(t => t.date >= from && t.date <= to), ...state.tournaments.filter(u => u.date >= from && u.date <= to)].map(x => x.id);
+  ids.forEach(id => { (state.avail[id] ||= {})[userId] = { status: "no", note: note || "" }; });
+  if (state.mode === "demo") { saveDemo(); return ids.length; }
+  if (ids.length) await run(sb.from("trainer_availability").upsert(ids.map(id => ({ team_id: TEAM, event_id: id, user_id: userId, status: "no", note: note || null }))));
+  return ids.length;
+}
+export async function setMemberDays(person, days) {
+  person.default_days = days;
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.rpc("set_member_days", { t: TEAM, uid: person.user_id || null, mail: person.email, days }));
+}
+export async function setMinTrainers(n) {
+  state.team.minTrainers = n;
+  if (state.mode === "demo") return saveDemo();
+  await run(sb.rpc("set_min_trainers", { t: TEAM, n }));
 }
 export async function setMemberNds(userId, nr) {
   const p = state.people.find(x => x.user_id === userId); if (p) p.nds_id = nr.trim();
