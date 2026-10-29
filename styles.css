@@ -467,3 +467,4 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .day[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .day[disabled]{cursor:default;opacity:.85}
 .btn.small{padding:6px 10px;font-size:13px}
+.ndsres p{margin:6px 0}

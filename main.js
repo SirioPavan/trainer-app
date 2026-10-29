@@ -657,6 +657,7 @@ function importBox() {
 }
 const ORT_KEY = "fcs-nds-ort";
 function ndsOrt() { try { return { ...db.NDS_ORT_DEFAULT, ...JSON.parse(localStorage.getItem(ORT_KEY) || "{}") }; } catch (e) { return { ...db.NDS_ORT_DEFAULT }; } }
+let ndsP = null;
 function ndsBox() {
   const td = db.today(), from = td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01"), ort = ndsOrt();
   const r = db.ndsExport(from, td, ort);
@@ -671,6 +672,17 @@ function ndsBox() {
       <div class="btnrow"><button class="btn" data-kind="awk">Anwesenheiten (CSV)</button><button class="btn ghost" data-kind="akt">Aktivitäten (CSV)</button></div>
     </form>
     <p class="small muted">Aktuell seit ${from.split("-").reverse().join(".")}: ${r.trainings} Trainings und ${r.tournaments} Turniere mit Anwesenheit, ${r.kidRows} Kinder- und ${r.leaderRows} Leiter-Zeilen.${r.missing.length ? ` Kinder ohne NDS-Nr. (fehlen im Export): ${r.missing.map(esc).join(", ")}.` : ""}${noNr.length ? ` Trainer ohne NDS-Nr.: ${noNr.map(esc).join(", ")} (unten im Trainerteam eintragen).` : ""}</p>
+    <details class="more" ${ndsP ? "open" : ""}><summary>NDS-Personennummern übernehmen</summary>
+      <div class="stack" style="margin-top:8px">
+        <p class="small muted">In der NDS im Kurs die Teilnehmerliste markieren und kopieren (Personennummer, Name, Vorname, Geburtsdatum …) und hier einfügen. Die App ordnet die Kinder über Name und Geburtsdatum zu.</p>
+        <textarea id="ndsp" rows="4" placeholder="100201273  Abbiati  Liam  11.12.2016 …">${esc(ndsP?.text || "")}</textarea>
+        <button class="btn ghost" id="ndspchk" type="button">Prüfen</button>
+        ${ndsP?.res ? `<div class="small ndsres">
+          <p><b>${ndsP.res.matched.length} zugeordnet</b>${ndsP.res.matched.filter(m => m.changed).length ? ` (${ndsP.res.matched.filter(m => m.changed).length} neu)` : ""}: ${ndsP.res.matched.map(m => esc(m.p.name) + " → " + m.nr).join(", ") || "–"}</p>
+          ${ndsP.res.missingInNds.length ? `<p class="warnline">Nicht in der NDS gefunden: ${ndsP.res.missingInNds.map(p => esc(p.name)).join(", ")}. Diese Kinder fehlen im Export, bis sie im NDS-Kurs sind.</p>` : ""}
+          ${ndsP.res.extraInNds.length ? `<p class="muted">In der NDS, aber nicht im App-Kader: ${ndsP.res.extraInNds.map(e => esc((e.first || "") + " " + (e.last || e.mid))).join(", ")}.</p>` : ""}
+          ${ndsP.res.matched.length ? `<button class="btn" id="ndspgo" type="button">Nummern übernehmen</button>` : ""}</div>` : ""}
+      </div></details>
     <details class="more"><summary>So geht der Import in der NDS</summary><ol class="small ndsol">
       <li>Die Aktivitäten (Trainings, Wettkämpfe) müssen im J+S-Kurs vorhanden sein, ebenso alle Kinder und Leiter/innen.</li>
       <li>Fehlen Aktivitäten: «Aktivitäten (CSV)» in der NDS unter Aktivitäten importieren. <b>Achtung:</b> Dieser Import löscht alle bereits erfassten Aktivitäten <b>samt Anwesenheiten</b> im Kurs. Also nur einmal zu Beginn verwenden, sonst die fehlenden Aktivitäten von Hand erfassen.</li>
@@ -701,11 +713,12 @@ function viewKader() {
          <div class="btnrow pad" style="margin-top:0;padding-top:0"><button class="btn ghost" data-edit="${p.id}">${editP === p.id ? "Bearbeiten schliessen" : "Bearbeiten"}</button></div></div>` : ""}
        ${open && editP === p.id ? `<form class="inline editp" data-save="${p.id}">
          <input name="name" value="${esc(p.name)}" required aria-label="Name"><input name="year" type="number" min="2010" max="2023" value="${p.year || ""}" aria-label="Jahrgang" placeholder="Jahrgang">
-         <input name="nds" value="${esc(p.nds_id || "")}" inputmode="numeric" placeholder="NDS-Personen-ID" aria-label="NDS-Personen-ID">
+         <input name="nds" value="${esc(p.nds_id || "")}" inputmode="numeric" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer">
+         <input name="pass" value="${esc(p.pass_nr || "")}" inputmode="numeric" placeholder="Passnummer (Clubcorner)" aria-label="Clubcorner-Passnummer">
          <button class="btn">Speichern</button><button type="button" class="btn ghost" data-off="${p.id}">Austragen</button></form>` : ""}`; }).join("") || '<p class="empty">Noch keine Kinder eingetragen. Füge das erste unten hinzu.</p>'}</div>
    <form class="inline card pad" id="addp"><input id="pn" placeholder="Vorname (Nachname-Initial)" required aria-label="Name" autocomplete="off">
      <input id="py" type="number" min="2010" max="2023" placeholder="Jahrgang" aria-label="Jahrgang">
-     <input id="pnds" inputmode="numeric" placeholder="NDS-Nr. (Passnummer)" aria-label="NDS-Personen-ID"><button class="btn">Kind hinzufügen</button></form>
+     <input id="pnds" inputmode="numeric" placeholder="Passnummer (Clubcorner)" aria-label="Clubcorner-Passnummer"><button class="btn">Kind hinzufügen</button></form>
    <p class="small muted">Tipp zum Datenschutz: Vorname und Initial reichen, zum Beispiel «Luca M.».</p>
    ${inactive.length ? `<details class="card pad"><summary class="lbl">Ausgetragene Kinder (${inactive.length})</summary><div class="list">${inactive.map(p => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(p.name)}</b></span><button class="linkbtn" data-on="${p.id}">Wieder aufnehmen</button></div>`).join("")}</div></details>` : ""}
    ${isAdmin() ? importBox() + ndsBox() : ""}
@@ -743,7 +756,7 @@ function viewKader() {
   V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
   V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
   V.querySelectorAll("[data-save]").forEach(f => f.onsubmit = e => { e.preventDefault(); const id = f.dataset.save; editP = null;
-    act(() => db.updatePlayer(id, { name: f.name.value.trim(), year: +f.year.value || null, nds_id: f.nds.value.trim() || null }), "Gespeichert"); });
+    act(() => db.updatePlayer(id, { name: f.name.value.trim(), year: +f.year.value || null, nds_id: f.nds.value.trim() || null, ...(f.pass ? { pass_nr: f.pass.value.trim() || null } : {}) }), "Gespeichert"); });
   const cc = V.querySelector("#ccfile");
   if (cc) cc.onchange = async () => {
     const f = cc.files[0]; if (!f) return; const msg = V.querySelector("#ccmsg");
@@ -754,6 +767,12 @@ function viewKader() {
       toast(`${r.added} neu, ${r.updated} aktualisiert`); render(true);
     } catch (e) { console.error(e); msg.textContent = e.message || String(e); }
   };
+  const pc = V.querySelector("#ndspchk");
+  if (pc) pc.onclick = () => { const text = V.querySelector("#ndsp").value; const list = db.parseNdsPersons(text);
+    if (!list.length) { toast("Keine NDS-Personen erkannt – braucht Personennummer, Name, Vorname und Geburtsdatum", true); return; }
+    ndsP = { text, res: db.matchNdsPersons(list) }; render(true); };
+  const pg = V.querySelector("#ndspgo");
+  if (pg) pg.onclick = () => { const res = ndsP.res; ndsP = null; act(async () => { const k = await db.applyNdsPersons(res); toast(`${k} NDS-Nummern übernommen`); }); };
   const nx = V.querySelector("#ndsx");
   if (nx) nx.onsubmit = e => {
     e.preventDefault();

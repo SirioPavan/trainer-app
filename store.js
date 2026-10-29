@@ -407,9 +407,9 @@ export async function deleteOwnExercise(id) {
 let demoOwn = [];
 const ownDemo = () => demoOwn;
 
-export async function addPlayer(name, year, nds_id) {
+export async function addPlayer(name, year, pass_nr) {
   const row = { team_id: TEAM, name, year: year || null, active: true };
-  if (nds_id) row.nds_id = String(nds_id).trim();
+  if (pass_nr) row.pass_nr = String(pass_nr).trim();
   if (state.mode === "demo") { state.players.push({ ...row, id: uid() }); return saveDemo(); }
   const { data, error } = await sb.from("players").insert(row).select().single(); if (error) throw error;
   state.players.push(data);
@@ -431,7 +431,7 @@ const CC = { "Name": "last_name", "Vorname": "first_name", "Strasse": "street", 
   "E-Mail gesetzliche Vertretung": "guardian1_email", "E-Mail gesetzliche Vertretung 2": "guardian2_email",
   "Tel. Mobil gesetzliche Vertretung": "guardian1_phone", "Name/Vorname gesetzliche Vertretung": "guardian1_name",
   "Tel. Mobil gesetzliche Vertretung 2": "guardian2_phone", "Name/Vorname gesetzliche Vertretung 2": "guardian2_name",
-  "Geburtsdatum": "birth_date", "Passnummer": "nds_id", "Rückennummer": "jersey", "Spielposition": "position", "Starker Fuss": "foot" };
+  "Geburtsdatum": "birth_date", "Passnummer": "pass_nr", "Rückennummer": "jersey", "Spielposition": "position", "Starker Fuss": "foot" };
 function parseCsv(text, sep) {
   const rows = []; let row = [], cell = "", q = false;
   for (let i = 0; i < text.length; i++) {
@@ -458,12 +458,12 @@ export function parseClubcorner(buf) {
     if (o.jersey !== undefined) o.jersey = /^\d+$/.test(o.jersey) ? +o.jersey : null;
     o.name = ((o.first_name || "").split(" ")[0] + " " + (o.last_name || "")).trim();
     return o;
-  }).filter(o => o.nds_id && o.name);
+  }).filter(o => o.pass_nr && o.name);
 }
 export async function importPlayers(list) {
   let added = 0, updated = 0;
   for (const o of list) {
-    const ex = state.players.find(p => p.nds_id === o.nds_id);
+    const ex = state.players.find(p => p.pass_nr === o.pass_nr) || state.players.find(p => !p.pass_nr && p.nds_id === o.pass_nr);
     if (ex) { await updatePlayer(ex.id, { ...o, active: true }); updated++; }
     else {
       const row = { team_id: TEAM, active: true, ...o };
@@ -474,6 +474,39 @@ export async function importPlayers(list) {
   }
   if (state.mode === "demo") saveDemo();
   return { added, updated };
+}
+
+/* ================= NDS-Personennummern übernehmen =================
+   Eingabe: Teilnehmerliste aus der NDS (kopiert oder als CSV) mit Personennummer, Name, Vorname, Geburtsdatum.
+   Zuordnung über Geburtsdatum + Name + erster Vorname (unabhängig von Akzenten und Gross/klein). */
+const norm = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
+export function parseNdsPersons(text) {
+  const out = [];
+  for (const raw of String(text || "").replace(/\r/g, "").split("\n")) {
+    const line = raw.trim(); const m = line.match(/^(\d{6,9})[\t;, ]+(.+?)[\t;, ]+(\d{1,2}\.\d{1,2}\.\d{4})/);
+    if (!m) continue;
+    const cols = line.split(/\t|;/).map(c => c.trim());
+    const [d, mo, y] = m[3].split(".");
+    out.push({ nr: m[1], last: cols.length >= 4 ? cols[1] : "", first: cols.length >= 4 ? cols[2] : "", mid: m[2], dob: `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}` });
+  }
+  return out;
+}
+export function matchNdsPersons(list) {
+  const kids = state.players.filter(p => p.active !== false), used = new Set(), matched = [];
+  for (const p of kids) {
+    const last = norm(p.last_name || p.name.split(" ").slice(1).join(" ")), first = norm(p.first_name || p.name.split(" ")[0]).split(" ")[0];
+    const cand = list.filter(e => !used.has(e.nr) && (!p.birth_date || e.dob === p.birth_date) &&
+      (e.last ? norm(e.last) === last && norm(e.first).split(" ")[0] === first : norm(e.mid).includes(last) && norm(e.mid).includes(first)));
+    if (cand.length === 1) { used.add(cand[0].nr); matched.push({ p, nr: cand[0].nr, changed: p.nds_id !== cand[0].nr }); }
+  }
+  const ids = new Set(matched.map(m => m.p.id));
+  return { matched, missingInNds: kids.filter(p => !ids.has(p.id)), extraInNds: list.filter(e => !used.has(e.nr)) };
+}
+export async function applyNdsPersons(res) {
+  for (const m of res.matched.filter(m => m.changed)) await updatePlayer(m.p.id, { nds_id: m.nr });
+  // Kinder, die (noch) nicht in der NDS sind: alte Passnummer nicht mehr als NDS-Nummer verwenden
+  for (const p of res.missingInNds.filter(p => p.nds_id && (p.nds_id === p.pass_nr || /^\d{7}$/.test(p.nds_id) && !p.pass_nr))) await updatePlayer(p.id, { nds_id: null, ...(p.pass_nr ? {} : { pass_nr: p.nds_id }) });
+  return res.matched.filter(m => m.changed).length;
 }
 
 /* ================= NDS-Export (J+S) =================
