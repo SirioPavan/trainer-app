@@ -154,21 +154,22 @@ function viewDashboard() {
   const list = state.trainings.filter(t => t.date >= td).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   const tours = state.tournaments.filter(u => u.date >= td && u.status !== "abgesagt").sort((a, b) => a.date.localeCompare(b.date));
   const next = list[0], nt = tours[0];
+  // Als Nächstes: was zuerst kommt, steht oben (Turnier vor Training am selben Tag)
+  const tourFirst = !!nt && (!next || nt.date <= next.date);
   const items = [...(filt !== "tour" ? list.map(x => ({ k: "t", date: x.date, o: x })) : []), ...(filt !== "train" ? state.tournaments.filter(u => u.date >= td).map(x => ({ k: "u", date: x.date, o: x })) : [])]
     .sort((a, b) => a.date.localeCompare(b.date) || (a.k === "u" ? 1 : -1));
   const vis = showAll ? items : items.slice(0, 12);
   const past = state.trainings.filter(t => t.date < td).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
   const n = next && dparts(next.date);
+  const heroHtml = next ? `<button class="hero" data-open="${next.id}">
+       <span class="k">${tourFirst ? "Nächstes Training" : "Als Nächstes · Training"}${inDays(next.date)}</span><span class="d">${n.wdl}<br>${n.d}. ${n.ml}</span>
+       <span class="hchips"><span>${next.start}–${next.end}</span><span>${PLACE[next.place]}</span><span>${mins(next)} Min.</span>${next.thema ? `<span>${esc(next.thema)}</span>` : ""}</span>
+       <span class="go">Training öffnen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>` : `<p class="card pad empty">Noch keine kommenden Trainings. Unten bei «+ Trainings planen» legst du die ganze Serie auf einmal an.</p>`;
+  const tourHtml = nt ? tourCard(nt, tourFirst) : "";
   V.innerHTML = `
    ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? `Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden. <a href="${location.origin + location.pathname}" class="demolink">Zur echten App mit Login →</a>` : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
-   ${next ? `<button class="hero" data-open="${next.id}">
-     <span class="k">Nächstes Training${inDays(next.date)}</span><span class="d">${n.wdl}<br>${n.d}. ${n.ml}</span>
-     <span class="hchips"><span>${next.start}–${next.end}</span><span>${PLACE[next.place]}</span><span>${mins(next)} Min.</span>${next.thema ? `<span>${esc(next.thema)}</span>` : ""}</span>
-     <span class="go">Training öffnen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>` : `<p class="card pad empty">Noch keine kommenden Trainings. Unten bei «+ Trainings planen» legst du die ganze Serie auf einmal an.</p>`}
+   ${tourFirst ? tourHtml + heroHtml : heroHtml + tourHtml}
    ${kpis(next)}
-   ${nt ? `<button class="card pad tourcard" data-tab-go="turniere"><span class="k">Nächstes Turnier</span>
-     <b>${dparts(nt.date).full}${nt.time ? " · " + esc(nt.time) : ""}</b>
-     <span class="muted small">${esc(nt.place)}${nt.org ? " · Veranstalter: " + esc(nt.org) : ""}</span></button>` : ""}
    <div class="sec-head"><h2>Termine</h2><span class="note">${list.length} Trainings · ${tours.length} Turniere</span></div>
    <div class="dtools"><button class="btn ghost pdfbtn" data-planpdf>${PDF_ICON}Trainingsplan als PDF</button></div>
    <div class="chips" role="group" aria-label="Filter">
@@ -354,11 +355,23 @@ function rowT(t) {
     <span class="mid"><b>Training · ${esc(t.thema)}</b><span>${t.start}–${t.end} · <span class="tag ${t.place === "grass" ? "rasen" : "halle"}">${PLACE[t.place]}</span> · ${mins(t)}'</span>${clash.length ? `<span class="warnline">Gleicher Tag: ${esc(clash[0].name)} (${clash[0].status})</span>` : ""}${crewChip(t)}</span>
     <span class="pill ${c ? "ok" : "open"}">${c ? c + "/" + n : "offen"}</span></button>`;
 }
+const TROPHY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>`;
+// Nächstes Turnier auf der Startseite: Datum, Ort, Zeit, Status, Trainer
+function tourCard(u, first) {
+  const d = dparts(u.date), c = crewOn() ? crew(u).filter(x => x.st === "yes").map(x => x.p.display_name || x.p.email) : [];
+  const min = state.team.minTrainers ?? 2;
+  return `<button class="tourcard${first ? " first" : ""}" data-tab-go="turniere">
+    <span class="tc-date"><span>${d.wd}</span><b>${d.d}</b><span>${d.m}</span></span>
+    <span class="tc-mid"><span class="tc-k">${TROPHY}${first ? "Als Nächstes · Turnier" : "Nächstes Turnier"}${inDays(u.date)}</span>
+      <b class="tc-t">${esc(u.place || u.name)}</b>
+      <span class="tc-m">${[u.time, u.cat, u.org ? "Veranstalter: " + u.org : ""].filter(Boolean).map(esc).join(" · ")}</span>
+      <span class="tc-chips"><span class="tc-st ${ST[u.status] || "open"}">${esc(u.status)}</span>${crewOn() ? `<span class="${c.length < min ? "tc-low" : ""}">👥 ${c.length ? c.map(esc).join(", ") : "noch kein Trainer"}</span>` : ""}</span>${first ? `<span class="go">Turnier öffnen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>` : ""}</span></button>`;
+}
 function rowU(u) {
   const d = dparts(u.date);
   return `<button class="row turn" data-u="${u.id}">
     <span class="date tour"><span class="dw">${d.wd}</span><br><span class="dd">${d.d}</span><br><span class="dm">${d.m}</span></span>
-    <span class="mid"><b>${/^turnier/i.test(u.name) ? "" : "Turnier · "}${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${crewChip(u)}</span>
+    <span class="mid"><b><i class="ticon">${TROPHY}</i>${/^turnier/i.test(u.name) ? "" : "Turnier · "}${esc(u.name)}</b><span>${u.time ? esc(u.time) + " · " : ""}${esc(u.place)}</span>${crewChip(u)}</span>
     <span class="pill ${ST[u.status] || "open"}">${esc(u.status)}</span></button>`;
 }
 

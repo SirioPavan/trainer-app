@@ -396,8 +396,7 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
   /* Planung: Nächstes Training und Turnier nebeneinander, Termine zweispaltig */
   body[data-view="trainings"] main{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
   body[data-view="trainings"] main>*{grid-column:1/-1}
-  body[data-view="trainings"] main>.hero{grid-column:1}
-  body[data-view="trainings"] main>.tourcard{grid-column:2;justify-content:center}
+  body[data-view="trainings"] main>.hero,body[data-view="trainings"] main>.tourcard{grid-column:auto}
   body[data-view="trainings"] main>.card.list{display:grid;grid-template-columns:1fr 1fr;column-gap:0}
   body[data-view="trainings"] main>.card.list>.row:nth-child(even){border-left:1px solid var(--line)}
   body[data-view="trainings"] main>.card.list>.row:nth-child(2){border-top:0}
@@ -562,3 +561,34 @@ body[data-view="trainings"] main>.card.list>.row{background:var(--surface);borde
   body[data-view="trainings"] main>.kpis{grid-column:1/-1}
   body[data-view="trainings"] main>.demo-note,body[data-view="trainings"] main>.hero,body[data-view="trainings"] main>.tourcard{order:-1}
 }
+
+/* Nächstes Turnier: rote Karte mit Kreidelinien */
+.tourcard{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;width:100%;text-align:left;cursor:pointer;border:0;border-radius:24px;padding:16px;color:#fff;
+  background:var(--red) var(--chalk) no-repeat right -60px top -70px;box-shadow:0 14px 30px -16px rgba(210,22,30,.7);font:inherit}
+.tc-date{display:flex;flex-direction:column;align-items:center;justify-content:center;width:64px;height:76px;border-radius:18px;background:#fff;color:#141414;line-height:1}
+.tc-date span{font-size:12px;font-weight:700;text-transform:uppercase;color:#B5121A}
+.tc-date b{font-family:var(--display);font-weight:800;font-size:34px;line-height:.95}
+.tc-mid{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tc-k{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;opacity:.9}
+.tc-k svg,.ticon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tc-t{font-family:var(--display);font-weight:800;font-size:26px;line-height:1;text-transform:uppercase;overflow-wrap:anywhere}
+.tc-m{font-size:13px;opacity:.9}
+.tc-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tc-chips span{font-size:12px;font-weight:700;background:rgba(255,255,255,.18);padding:5px 10px;border-radius:99px}
+.tc-chips .tc-st{background:#fff;color:#141414}
+.tc-chips .tc-st.wait{background:#FBEFD9;color:#7A4800}
+.tc-chips .tc-low{background:#141414;color:#fff}
+.tourcard:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.ticon{display:inline-flex;vertical-align:-2px;margin-right:5px;color:var(--red-ink)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tourcard{box-shadow:none}}
+:root[data-theme="dark"] .tourcard{box-shadow:none}
+@media (min-width:1024px){body[data-view="trainings"] main>.tourcard{align-self:stretch}}
+
+/* Turnier als nächste Einheit: gross wie die Trainingskarte */
+.tourcard.first{grid-template-columns:auto minmax(0,1fr);align-items:start;padding:20px}
+.tourcard.first .tc-date{width:72px;height:86px}
+.tourcard.first .tc-date b{font-size:40px}
+.tourcard.first .tc-t{font-size:34px}
+.tc-big{font-size:14px;font-weight:600;opacity:.9}
+.tourcard .go{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin-top:10px;background:#141414;color:#fff;border-radius:99px;padding:0 18px;min-height:46px;font-size:15px;font-weight:700}
+.tourcard .go svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
