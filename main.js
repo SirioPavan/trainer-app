@@ -13,13 +13,23 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"], MO = ["Jan", "Feb", "Mär
 const V = document.getElementById("view");
 
 function esc(s) { return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }
-function dparts(iso) { const d = new Date(iso + "T12:00:00"); return { wd: WD[d.getDay()], d: d.getDate(), m: MO[d.getMonth()], y: d.getFullYear(), full: WD[d.getDay()] + ", " + d.getDate() + ". " + MO[d.getMonth()] + " " + d.getFullYear() }; }
+function dparts(iso) { const d = new Date(iso + "T12:00:00"); return { wd: WD[d.getDay()], wdl: WDL[d.getDay()], ml: MOL[d.getMonth()], d: d.getDate(), m: MO[d.getMonth()], y: d.getFullYear(), full: WD[d.getDay()] + ", " + d.getDate() + ". " + MO[d.getMonth()] + " " + d.getFullYear() }; }
 const mins = t => t.blocks.reduce((a, b) => a + b.min, 0);
 const ex = id => state.exercises.find(e => e.id === id);
 const activePlayers = () => state.players.filter(p => p.active !== false);
 const attCount = t => Object.entries(state.attendance[t.id] || {}).filter(([pid, v]) => v && activePlayers().some(p => p.id === pid)).length;
 const isAdmin = () => state.role === "admin";
 
+const WDL = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"], MOL = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+function inDays(iso) { const d = Math.round((new Date(iso + "T12:00:00") - new Date(db.today() + "T12:00:00")) / 864e5); return d === 0 ? " · heute" : d === 1 ? " · morgen" : d > 1 ? ` · in ${d} Tagen` : ""; }
+// Kennzahlen auf der Startseite: Kinder, Anwesenheit der Saison, Trainer beim nächsten Training
+function kpis(next) {
+  const kids = activePlayers().length, s = statData("season");
+  const t3 = next && crewOn() ? [crewYes(next), "Trainer am " + WD[new Date(next.date + "T12:00:00").getDay()]] : [state.tournaments.filter(u => u.date >= db.today() && u.status !== "abgesagt").length, "Turniere geplant"];
+  return `<div class="kpis"><div class="tile"><b>${kids}</b><span>Kinder im Kader</span></div>
+    <div class="tile"><b>${s.trs.length ? Math.round(s.avg * 100) + "%" : "–"}</b><span>Anwesenheit Saison</span></div>
+    <div class="tile"><b>${t3[0]}</b><span>${t3[1]}</span></div></div>`;
+}
 function toast(msg, bad) {
   const el = document.getElementById("toast");
   el.textContent = msg; el.className = "toast show" + (bad ? " bad" : "");
@@ -152,9 +162,10 @@ function viewDashboard() {
   V.innerHTML = `
    ${state.mode === "demo" ? `<p class="demo-note">${state.forced ? `Vorführ-Version mit Beispieldaten: Probier alles aus, nichts davon landet in der echten Datenbank. Die Kinder-Namen sind erfunden. <a href="${location.origin + location.pathname}" class="demolink">Zur echten App mit Login →</a>` : "Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Sobald die Datenbank verbunden ist, sehen alle Trainer denselben Stand."}</p>` : ""}
    ${next ? `<button class="hero" data-open="${next.id}">
-     <span class="k">Nächstes Training</span><span class="d">${n.full}</span>
-     <span class="meta">${next.start}–${next.end} · ${PLACE[next.place]} · ${mins(next)} Min.<br>${esc(next.thema)}</span>
-     <span class="go">Training öffnen</span></button>` : `<p class="card pad empty">Noch keine kommenden Trainings. Unten bei «+ Trainings planen» legst du die ganze Serie auf einmal an.</p>`}
+     <span class="k">Nächstes Training${inDays(next.date)}</span><span class="d">${n.wdl}<br>${n.d}. ${n.ml}</span>
+     <span class="hchips"><span>${next.start}–${next.end}</span><span>${PLACE[next.place]}</span><span>${mins(next)} Min.</span>${next.thema ? `<span>${esc(next.thema)}</span>` : ""}</span>
+     <span class="go">Training öffnen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>` : `<p class="card pad empty">Noch keine kommenden Trainings. Unten bei «+ Trainings planen» legst du die ganze Serie auf einmal an.</p>`}
+   ${kpis(next)}
    ${nt ? `<button class="card pad tourcard" data-tab-go="turniere"><span class="k">Nächstes Turnier</span>
      <b>${dparts(nt.date).full}${nt.time ? " · " + esc(nt.time) : ""}</b>
      <span class="muted small">${esc(nt.place)}${nt.org ? " · Veranstalter: " + esc(nt.org) : ""}</span></button>` : ""}
