@@ -233,7 +233,7 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .rbox ul{margin:4px 0 0;padding-left:18px}
 @media (min-width:640px){.rgrid{grid-template-columns:1fr 1fr}}
 
-.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--soft);border-radius:10px;padding:3px;gap:3px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--soft);border-radius:10px;padding:3px;gap:3px}
 .seg button{border:0;background:transparent;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;color:var(--muted)}
 .seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .seg button:focus-visible{outline:3px solid var(--red);outline-offset:1px}
@@ -442,3 +442,4 @@ form.inline select{flex:1 1 120px;min-width:0;border:1.5px solid var(--line);bor
 .mk>span:last-child{font-size:13px;color:var(--muted);line-height:1.3}
 .mkn{position:absolute;top:8px;right:10px;font-family:var(--display);font-weight:800;font-size:22px;color:var(--line);line-height:1}
 .top .club{overflow:hidden;text-overflow:ellipsis}
+.chkrow .chk{flex:0 1 auto}

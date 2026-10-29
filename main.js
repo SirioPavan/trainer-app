@@ -5,6 +5,7 @@ import { PH, drawDiagram } from "./diagram.js";
 import { WHEEL_VAR, WHEEL_MOT } from "./wissen.js";
 import * as pdf from "./pdf.js";
 import { generateSeries, themesFor, minutesBetween, splitMinutes, WDN } from "./plan.js";
+import { generate, FOCUS } from "./gen.js";
 
 const PLACE = { grass: "Rasen", hall: "Halle" };
 const ST = { eingeteilt: "ok", angemeldet: "ok", Warteliste: "wait", abgesagt: "open" };
@@ -332,7 +333,7 @@ function bindVideos() {
     else { b.dataset.armed = 1; b.textContent = "Sicher?"; }
   });
 }
-function exCard(e, idx, t, surface) {
+function exCard(e, idx, t, surface, preview) {
   if (!e) return `<p class="card pad empty">Übung nicht gefunden.</p>`;
   // Tauschen: alle Übungen der Phase dieses Blocks (passender Untergrund zuerst), die aktuelle ist ausgewählt
   const bph = t ? (t.blocks[idx]?.ph || e.ph) : e.ph;
@@ -348,7 +349,7 @@ function exCard(e, idx, t, surface) {
       ${e.own ? `<p class="own">${esc(e.own)}</p>` : ""}
       ${e.coach?.length ? `<div><span class="lbl">Coaching:</span><ul>${e.coach.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
       ${e.var ? `<p class="var"><span class="lbl">Rad der Variation:</span> ${esc(e.var)}</p>` : ""}
-      ${videoBlock(e)}
+      ${preview ? "" : videoBlock(e)}
       ${t && isAdmin() ? `<div class="swap"><label for="sw${idx}" class="muted">Übung tauschen:</label>
         <select id="sw${idx}" data-swap="${idx}" data-cur="${e.id}">${swapOpts}</select></div>` : ""}
     </div></article>`;
@@ -444,7 +445,8 @@ function viewTemplates() {
     + `<p class="small muted">Eine Vorlage ist ein komplettes Training. Unter «Planung → + Training hinzufügen» legst du mit einer Vorlage ein Training an einem bestimmten Tag an.</p>`;
 }
 function viewLibrary() {
-  const modeBar = `<div class="seg" role="tablist" aria-label="Ansicht">${[["ex", "Übungen"], ["tpl", "Trainingsvorlagen"]].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${libMode === k}">${l}</button>`).join("")}</div>`;
+  const modeBar = `<div class="seg" role="tablist" aria-label="Ansicht">${[["ex", "Übungen"], ["gen", "Generator"], ["tpl", "Vorlagen"]].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${libMode === k}">${l}</button>`).join("")}</div>`;
+  if (libMode === "gen") return viewGenerator(modeBar);
   if (libMode === "tpl") {
     V.innerHTML = modeBar + viewTemplates();
     V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
@@ -468,13 +470,71 @@ function viewLibrary() {
 }
 function viewExercise(id) {
   const e = ex(id); const td = db.today();
+  if (!e) { route = { tab: "uebungen" }; return render(); }
   const usedIn = state.trainings.filter(t => t.date >= td && t.blocks.some(b => b.ex === id));
   V.innerHTML = `<button class="back" data-back>‹ Übungen</button>
    <div class="phase-h" style="--pc:var(${PH[e.ph].c})">${PH[e.ph].t}<span class="min">${PLACE[e.place]}</span></div>
    ${exCard(e)}
+   ${e.team_id && e.team_id === state.team.id && String(e.id).startsWith("own-") ? `<div class="btnrow"><span class="pill ok">Eigene Übung</span><button class="btn ghost danger" data-delex>Eigene Übung löschen</button></div>` : ""}
    <p class="small muted">${usedIn.length ? "Eingeplant: " + usedIn.slice(0, 6).map(t => dparts(t.date).wd + " " + dparts(t.date).d + ". " + dparts(t.date).m).join(", ") + (usedIn.length > 6 ? " …" : "") : "In keinem kommenden Training eingeplant."}</p>`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "uebungen" });
   bindVideos();
+  const de = V.querySelector("[data-delex]");
+  if (de) de.onclick = () => {
+    if (usedIn.length) { toast("Diese Übung ist noch in Trainings eingeplant – zuerst dort tauschen", true); return; }
+    if (de.dataset.armed) act(async () => { await db.deleteOwnExercise(e.id); route = { tab: "uebungen" }; history.replaceState(route, ""); }, "Übung gelöscht");
+    else { de.dataset.armed = 1; de.textContent = "Wirklich löschen? Nochmals tippen"; }
+  };
+}
+
+
+/* ================= Übungsgenerator ================= */
+let genOpts = null, genSeed = 1, genRes = null, genSeen = [];
+function viewGenerator(modeBar) {
+  const o = genOpts ||= { phase: "le", place: state.trainings.find(t => t.date >= db.today())?.place || "hall", n: activePlayers().length || 12,
+    balls: activePlayers().length || 12, goals: "mini2", cones: true, hoops: true, mats: false, bibs: true, focus: "", diff: "" };
+  const opt = (v, cur, l) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${l}</option>`;
+  const chk = (k, l) => `<label class="chk"><input type="checkbox" name="${k}" ${o[k] ? "checked" : ""}> ${l}</label>`;
+  V.innerHTML = modeBar + `
+   <div class="sec-head"><h2>Übungsgenerator</h2><span class="note">aus ${state.exercises.length} Übungen</span></div>
+   <form class="card pad stack planf" id="genf">
+     <p class="small muted">Beschreibe deine Situation. Die App sucht die passendste Übung aus der Bibliothek und passt sie an: Feldgrösse, Teams, Bälle, Tore, Material und Schwierigkeit nach dem Rad der Variation.</p>
+     <div class="frow">
+       <label class="lbl">Phase<select name="phase">${Object.entries({ auf: "Auffangen", ein: "Einleitung", sp: "Fussball spielen", le: "Fussball spielen lernen", vi: "Vielseitigkeit", aus: "Ausklang" }).map(([k, l]) => opt(k, o.phase, l)).join("")}</select></label>
+       <label class="lbl">Ort<select name="place">${opt("hall", o.place, "Halle")}${opt("grass", o.place, "Rasen")}</select></label></div>
+     <div class="frow">
+       <label class="lbl">Kinder<input type="number" name="n" min="2" max="40" value="${o.n}"></label>
+       <label class="lbl">Bälle<input type="number" name="balls" min="0" max="40" value="${o.balls}"></label>
+       <label class="lbl">Tore<select name="goals">${opt("", o.goals, "keine")}${opt("mini2", o.goals, "2 Minitore")}${opt("mini4", o.goals, "4 Minitore")}${opt("big", o.goals, "2 grosse Tore")}</select></label></div>
+     <div class="frow">
+       <label class="lbl">Schwerpunkt<select name="focus">${opt("", o.focus, "egal")}${Object.entries(FOCUS).map(([k, [l]]) => opt(k, o.focus, l)).join("")}</select></label>
+       <label class="lbl">Schwierigkeit<select name="diff">${opt("easy", o.diff, "leichter")}${opt("", o.diff, "normal")}${opt("hard", o.diff, "schwerer")}</select></label></div>
+     <span class="lbl">Material vorhanden</span>
+     <div class="frow chkrow">${chk("cones", "Kegel/Hütchen")}${chk("hoops", "Reifen")}${chk("mats", "Matten/Bank")}${chk("bibs", "Leibchen")}</div>
+     <div class="btnrow"><button class="btn" data-g="new">Übung erzeugen</button>${genRes ? `<button class="btn ghost" data-g="again">Andere Variante</button>` : ""}</div>
+   </form>
+   ${genRes ? `<div class="phase-h" style="--pc:var(${PH[genRes.ph].c})">${PH[genRes.ph].t}<span class="min">${PLACE[genRes.place]} · ${genRes.gen.minutes}</span></div>
+     ${exCard(genRes, 0, null, genRes.place, true)}
+     <p class="small muted">Basis: ${esc(genRes.gen.baseName)}${genRes.gen.page ? ` (J+S-Manual S. ${esc(genRes.gen.page)})` : ""}. Bitte vor dem Einsatz kurz prüfen.</p>
+     <div class="btnrow"><button class="btn" data-gsave>Als eigene Übung speichern</button><button class="btn ghost" data-gbase="${genRes.gen.base}">Originalübung ansehen</button></div>`
+    : `<p class="small muted card pad">Noch keine Übung erzeugt.</p>`}`;
+  V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
+  const f = V.querySelector("#genf");
+  const read = () => { const g = k => f[k].value; genOpts = { phase: g("phase"), place: g("place"), n: +g("n") || 12, balls: +g("balls") || 0, goals: g("goals"),
+    focus: g("focus"), diff: g("diff"), cones: f.cones.checked, hoops: f.hoops.checked, mats: f.mats.checked, bibs: f.bibs.checked }; };
+  f.onsubmit = e => {
+    e.preventDefault(); read();
+    const again = e.submitter?.dataset.g === "again";
+    genSeed = again ? genSeed + 1 : 1 + Math.floor(Math.random() * 1000);
+    if (!again) genSeen = [];
+    genRes = generate(state.exercises, { ...genOpts, level: state.team.level, exclude: genSeen }, genSeed);
+    if (genRes) { genSeen.push(genRes.gen.base); if (genSeen.length >= 5) genSeen = genSeen.slice(-3); }
+    if (!genRes) toast("Keine Übung dieser Phase in der Bibliothek", true);
+    render(true);
+  };
+  const sv = V.querySelector("[data-gsave]");
+  if (sv) sv.onclick = () => { const g = genRes; act(async () => { const id = await db.addOwnExercise(g); genRes = null; libMode = "ex"; go({ tab: "uebungen", exercise: id }); }, "Als eigene Übung gespeichert"); };
+  const gb = V.querySelector("[data-gbase]"); if (gb) gb.onclick = () => go({ tab: "uebungen", exercise: gb.dataset.gbase });
 }
 
 /* ================= Kader ================= */

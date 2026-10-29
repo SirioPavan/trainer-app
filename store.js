@@ -255,13 +255,14 @@ function loadDemo() {
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
   state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.role = "admin"; state.links = d.links || [];
+  demoOwn = d.ownEx || []; demoOwn.forEach(r => state.exercises.push(normEx(r)));
   state.user = { email: "demo", id: "demo-u1" };
 }
 function saveDemo() {
   try {
     localStorage.setItem(demoKey(), JSON.stringify({
       trainings: state.trainings, players: state.players, attendance: state.attendance,
-      people: state.people, links: state.links, leaders: state.leaders,
+      people: state.people, links: state.links, leaders: state.leaders, ownEx: demoOwn,
       tournaments: state.tournaments.map(u => ({ ...u, time_text: u.time, organizer: u.org, category: u.cat }))
     }));
   } catch (e) {}
@@ -354,6 +355,25 @@ export async function deleteTrainings(ids) {
   if (state.mode === "demo") return saveDemo();
   for (let i = 0; i < ids.length; i += 100) await run(sb.from("trainings").delete().in("id", ids.slice(i, i + 100)));
 }
+
+// Eigene Übung der Mannschaft speichern (z. B. aus dem Übungsgenerator)
+export async function addOwnExercise(g) {
+  const id = "own-" + uid().slice(0, 13).replace(/[^a-z0-9-]/gi, "");
+  const data = { org: g.org, ablauf: g.ablauf, offen: g.offen, ueben: g.ueben, wett: g.wett, coach: g.coach, var: g.var, own: g.own, d: g.d, src: g.src, both: g.both || false };
+  Object.keys(data).forEach(k => data[k] == null && delete data[k]);
+  const row = { id, team_id: TEAM, place: g.place, phase: g.ph, name: g.name.replace(/ – angepasst$/, "") + " (eigene)", page: null, data, levels: [state.team.level] };
+  if (state.mode === "demo") { state.exercises.push(normEx(row)); ownDemo().push(row); saveDemo(); return id; }
+  await run(sb.from("exercises").insert(row));
+  state.exercises.push(normEx(row));
+  return id;
+}
+export async function deleteOwnExercise(id) {
+  state.exercises = state.exercises.filter(e => e.id !== id);
+  if (state.mode === "demo") { const o = ownDemo(); o.splice(0, o.length, ...o.filter(r => r.id !== id)); return saveDemo(); }
+  await run(sb.from("exercises").delete().eq("id", id).eq("team_id", TEAM));
+}
+let demoOwn = [];
+const ownDemo = () => demoOwn;
 
 export async function addPlayer(name, year, nds_id) {
   const row = { team_id: TEAM, name, year: year || null, active: true };
