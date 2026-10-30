@@ -32,7 +32,8 @@ export function drawDiagram(d){
   if(d.full){o+=`<line x1="50" y1="0" x2="50" y2="64" stroke="${lineC}" stroke-width=".5"/><circle cx="50" cy="32" r="8" fill="none" stroke="${lineC}" stroke-width=".5"/><rect x="0" y="16" width="16" height="32" fill="none" stroke="${lineC}" stroke-width=".5"/><rect x="84" y="16" width="16" height="32" fill="none" stroke="${lineC}" stroke-width=".5"/>`}
   const L=[],P=[];
   for(const it of d.items){
-    const [t,...a]=it;
+    // Daten aus der Datenbank: Zahlen bleiben Zahlen, Texte ohne Zeichen, die das SVG aufbrechen könnten
+    const [t,...a]=(Array.isArray(it)?it:[]).map(v=>typeof v==="number"||typeof v==="boolean"?v:String(v??"").replace(/"/g,"”").replace(/[<>]/g,""));
     switch(t){
       case "area":L.push(`<rect x="${a[0]}" y="${a[1]}" width="${a[2]}" height="${a[3]}" fill="rgba(255,255,255,.08)" stroke="${lineC}" stroke-width=".6" stroke-dasharray="1.6 1.2"/>`);break;
       case "zone":L.push(`<rect x="${a[0]}" y="${a[1]}" width="${a[2]}" height="${a[3]}" fill="rgba(255,255,255,.16)" stroke="${lineC}" stroke-width=".5"/>`);if(a[4])L.push(`<text x="${a[0]+a[2]/2}" y="${a[1]+a[3]/2+1.2}" text-anchor="middle" font-size="3.2" ${F} fill="${arrC}" opacity=".85">${svgEsc(a[4])}</text>`);break;

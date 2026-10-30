@@ -12,6 +12,7 @@ const ST = { eingeteilt: "ok", angemeldet: "ok", Warteliste: "wait", abgesagt: "
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"], MO = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 const V = document.getElementById("view");
 
+const okUrl = u => /^https?:\/\//i.test(String(u || ""));   // nur Web-Links, nie javascript: o. ä.
 function esc(s) { return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }
 function dparts(iso) { const d = new Date(iso + "T12:00:00"); return { wd: WD[d.getDay()], wdl: WDL[d.getDay()], ml: MOL[d.getMonth()], d: d.getDate(), m: MO[d.getMonth()], y: d.getFullYear(), full: WD[d.getDay()] + ", " + d.getDate() + ". " + MO[d.getMonth()] + " " + d.getFullYear() }; }
 const mins = t => t.blocks.reduce((a, b) => a + b.min, 0);
@@ -381,8 +382,8 @@ function videoBlock(e) {
   const vids = (e.videos || []);
   return `<div class="videos" data-vfor="${e.id}">
     ${vids.length || own.length ? `<span class="lbl">Videos:</span>` : ""}
-    ${vids.map(v => `<a class="vlink" href="${esc(v.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(v.title)}</a>`).join("")}
-    ${own.map(l => `<span class="vrow"><a class="vlink own" href="${esc(l.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(l.title)}</a><button class="linkbtn" data-dellink="${l.id}">Entfernen</button></span>`).join("")}
+    ${vids.filter(v => okUrl(v.url)).map(v => `<a class="vlink" href="${esc(v.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(v.title)}</a>`).join("")}
+    ${own.filter(l => okUrl(l.url)).map(l => `<span class="vrow"><a class="vlink own" href="${esc(l.url)}" target="_blank" rel="noopener"><span class="play" aria-hidden="true">▶</span>${esc(l.title)}</a><button class="linkbtn" data-dellink="${l.id}">Entfernen</button></span>`).join("")}
     <details class="addvid"><summary>+ Video-Link hinzufügen</summary>
       <form class="inline" data-addlink="${e.id}" style="margin-top:8px">
         <input name="title" placeholder="Titel, z. B. Finte vorgezeigt" required aria-label="Titel">

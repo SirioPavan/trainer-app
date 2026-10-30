@@ -129,8 +129,8 @@ async function load() {
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
   state.team = mine ? { id: mine.id, name: mine.name, level: mine.level, levels: mine.levels, minTrainers: mine.minTrainers } : { id: TEAM, name: "", level: "E", levels: ["E"], minTrainers: 2 };
-  state.exercises = (ex.data || []).map(normEx).filter(x => forLevel(x, state.team.level, state.team.levels));
-  state.templates = (tp.data || []).map(t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level, state.team.levels));
+  state.exercises = (ex.data || []).filter(e => SAFE_ID.test(e.id)).map(normEx).filter(x => forLevel(x, state.team.level, state.team.levels));
+  state.templates = (tp.data || []).filter(t => SAFE_ID.test(t.id)).map(t => ({ ...t, blocks: cleanBlocks(t.blocks), start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.trainings = (tr.data || []).map(normT);
   state.tournaments = (tu.data || []).map(normU);
   state.players = pl.data || [];
@@ -170,7 +170,10 @@ async function loadDocs() {
     (urls || []).forEach(u => { if (u.signedUrl) state.docUrls[u.path] = u.signedUrl; });
   }
 }
-const normT = t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5), tpl: t.template_id });
+const SAFE_ID = /^[A-Za-z0-9_.-]{1,80}$/, PHS = ["auf", "ein", "sp", "le", "vi", "aus"];
+const cleanBlocks = bl => (Array.isArray(bl) ? bl : []).filter(b => b && typeof b === "object")
+  .map(b => ({ ...b, min: Math.max(0, Math.round(+b.min) || 0), ph: PHS.includes(b.ph) ? b.ph : "sp", ex: SAFE_ID.test(String(b.ex || "")) ? String(b.ex) : "" }));
+const normT = t => ({ ...t, start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5), tpl: t.template_id, blocks: cleanBlocks(t.blocks) });
 const normU = u => ({ ...u, time: u.time_text, org: u.organizer, cat: u.category });
 
 let timer = null;
