@@ -614,3 +614,4 @@ body[data-view="trainings"] main>.card.list>.row{background:var(--surface);borde
 .edfield{max-width:640px;border-radius:14px;overflow:hidden;cursor:crosshair;touch-action:manipulation;box-shadow:var(--shadow)}
 .edfield svg{display:block;width:100%;height:auto}
 .btn[disabled]{opacity:.45;cursor:default}
+.edfield.draw{touch-action:none}

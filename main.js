@@ -635,9 +635,14 @@ function edFrom(e, fromGen) {
     org: e?.org || "", ablauf: e?.ablauf || [e?.offen, e?.ueben].filter(Boolean).join(" "), wett: e?.wett || "", coach: (e?.coach || []).join("\n"), var: e?.var || "",
     items: JSON.parse(JSON.stringify(e?.d?.items || [])), full: !!e?.d?.full };
 }
+let edDrag = null;
 function edSketch() {
-  const d = { s: edEx.place === "hall" ? "hall" : "grass", full: edEx.full, items: edEx.items.concat(edPend ? [["ball", edPend[0], edPend[1]]] : []) };
-  return drawDiagram(d);
+  const extra = edDrag && edDrag.to ? [[edTool, edDrag.from[0], edDrag.from[1], edDrag.to[0], edDrag.to[1]]] : [];
+  const d = { s: edEx.place === "hall" ? "hall" : "grass", full: edEx.full, items: edEx.items.concat(extra) };
+  let svg = drawDiagram(d);
+  const st = edDrag?.from || edPend;   // Startpunkt eines Pfeils deutlich markieren
+  if (st) svg = svg.replace("</svg>", `<circle cx="${st[0]}" cy="${st[1]}" r="2.8" fill="none" stroke="#D2161E" stroke-width=".9"/><circle cx="${st[0]}" cy="${st[1]}" r=".9" fill="#D2161E"/></svg>`);
+  return svg;
 }
 function viewEditor(modeBar) {
   edEx ||= edFrom(null);
@@ -652,7 +657,7 @@ function viewEditor(modeBar) {
        <label class="lbl">Ort<select name="where">${opt("hall", x.both ? "" : x.place, "Halle")}${opt("grass", x.both ? "" : x.place, "Rasen")}${opt("both", x.both ? "both" : "", "Halle und Rasen")}</select></label></div>
      <span class="lbl">Skizze</span>
      <div class="edtools" role="toolbar" aria-label="Werkzeuge">${ED_TOOLS.map(([k, l, c]) => `<button type="button" class="edtool" data-tool="${k}" aria-pressed="${edTool === k}"><i class="ic ${c}" aria-hidden="true"></i>${l}</button>`).join("")}</div>
-     <div class="edfield" id="edfield" aria-label="Spielfeld: tippen, um das gewählte Element zu setzen">${edSketch()}</div>
+     <div class="edfield${ED_ARROWS.includes(edTool) ? " draw" : ""}" id="edfield" aria-label="Spielfeld: tippen, um das gewählte Element zu setzen">${edSketch()}</div>
      <p class="small muted" id="edhint">${edHint()}</p>
      <div class="btnrow"><button type="button" class="btn ghost small" data-ed="undo" ${edHist.length ? "" : "disabled"}>Rückgängig</button>
        <button type="button" class="btn ghost small" data-ed="clear">Skizze leeren</button>
@@ -673,20 +678,29 @@ function viewEditor(modeBar) {
   const redraw = () => { fld.innerHTML = edSketch(); V.querySelector("#edhint").textContent = edHint(); const u = V.querySelector('[data-ed="undo"]'); u.disabled = !edHist.length; };
   f.oninput = () => { const pl = x.place, fu = x.full; read(); if (pl !== x.place || fu !== x.full) redraw(); };
   V.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { edTool = b.dataset.tool; edPend = null;
-    V.querySelectorAll("[data-tool]").forEach(o => o.setAttribute("aria-pressed", o === b)); redraw(); });
+    V.querySelectorAll("[data-tool]").forEach(o => o.setAttribute("aria-pressed", o === b)); fld.classList.toggle("draw", ED_ARROWS.includes(edTool)); redraw(); });
+  const pos = ev => { const svg = fld.querySelector("svg"), r = svg.getBoundingClientRect(), cl = (v, a, b) => Math.min(b, Math.max(a, v)), q = v => Math.round(v * 2) / 2;
+    return [q(cl((ev.clientX - r.left) / r.width * 110 - 5, 0, 100)), q(cl((ev.clientY - r.top) / r.height * 74 - 5, 0, 64))]; };
+  // Pfeile: ziehen (Finger/Maus gedrückt halten) oder zweimal tippen (Start, Ziel)
+  fld.onpointerdown = ev => { if (!ED_ARROWS.includes(edTool)) return; ev.preventDefault(); fld.setPointerCapture?.(ev.pointerId); edDrag = { from: edPend || pos(ev), to: null, moved: false }; redraw(); };
+  fld.onpointermove = ev => { if (!edDrag) return; const p = pos(ev); if (Math.hypot(p[0] - edDrag.from[0], p[1] - edDrag.from[1]) > 2) { edDrag.to = p; edDrag.moved = true; fld.innerHTML = edSketch(); } };
+  fld.onpointerup = ev => {
+    if (!edDrag) return; const dr = edDrag; edDrag = null;
+    if (dr.moved && dr.to) { edHist.push(JSON.stringify(x.items)); x.items.push([edTool, dr.from[0], dr.from[1], dr.to[0], dr.to[1]]); edPend = null; }
+    else if (edPend) { const p = pos(ev); if (Math.hypot(edPend[0] - p[0], edPend[1] - p[1]) > 2) { edHist.push(JSON.stringify(x.items)); x.items.push([edTool, edPend[0], edPend[1], p[0], p[1]]); } edPend = null; }
+    else edPend = dr.from;
+    redraw();
+  };
+  fld.onpointercancel = () => { edDrag = null; redraw(); };
   fld.onclick = ev => {
-    const svg = fld.querySelector("svg"); if (!svg) return;
-    const r = svg.getBoundingClientRect(), cl = (v, a, b) => Math.min(b, Math.max(a, v)), q = v => Math.round(v * 2) / 2;
-    const px = q(cl((ev.clientX - r.left) / r.width * 110 - 5, 0, 100)), py = q(cl((ev.clientY - r.top) / r.height * 74 - 5, 0, 64));
+    if (!fld.querySelector("svg") || ED_ARROWS.includes(edTool)) return;
+    const [px, py] = pos(ev);
     const push = it => { edHist.push(JSON.stringify(x.items)); if (edHist.length > 40) edHist.shift(); x.items.push(it); };
     if (edTool === "del") {
       let best = -1, bd = 5;
       x.items.forEach((it, i) => { const pts = ED_ARROWS.includes(it[0]) ? [[it[1], it[2]], [it[3], it[4]], [(it[1] + it[3]) / 2, (it[2] + it[4]) / 2]] : typeof it[1] === "number" ? [[it[1], it[2] ?? 32]] : it[0] === "G" ? [[it[1] === "L" ? 0 : 100, 32]] : [];
         pts.forEach(([a, b]) => { const dd = Math.hypot(a - px, b - py); if (dd < bd) { bd = dd; best = i; } }); });
       if (best >= 0) { edHist.push(JSON.stringify(x.items)); x.items.splice(best, 1); }
-    } else if (ED_ARROWS.includes(edTool)) {
-      if (!edPend) edPend = [px, py];
-      else { if (Math.hypot(edPend[0] - px, edPend[1] - py) > 2) push([edTool, edPend[0], edPend[1], px, py]); edPend = null; }
     } else if (edTool === "ball") {
       const pl = x.items.find(it => ["A", "B", "J"].includes(it[0]) && Math.hypot(it[1] - px, it[2] - py) < 3.5);
       if (pl) { edHist.push(JSON.stringify(x.items)); pl[3] = pl[3] ? 0 : 1; } else push(["ball", px, py]);
@@ -711,7 +725,7 @@ function viewEditor(modeBar) {
 }
 function edHint() {
   if (edTool === "del") return "Tippe auf ein Element, um es zu entfernen.";
-  if (ED_ARROWS.includes(edTool)) return edPend ? "Jetzt auf das Ziel des Pfeils tippen." : "Tippe auf den Start des Pfeils, danach auf das Ziel.";
+  if (ED_ARROWS.includes(edTool)) return edPend ? "Start gesetzt (roter Ring). Jetzt auf das Ziel tippen." : "Pfeil vom Start zum Ziel ziehen, oder zuerst auf den Start und dann auf das Ziel tippen.";
   if (edTool === "ball") return "Tippe ins Feld für einen Ball. Auf ein Kind tippen gibt ihm einen Ball (nochmals tippen nimmt ihn weg).";
   if (edTool === "G") return "Tippe links oder rechts, um ein grosses Tor zu setzen.";
   return "Tippe ins Feld, um das Element zu setzen.";
