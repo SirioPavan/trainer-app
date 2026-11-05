@@ -549,10 +549,12 @@ function viewExercise(id) {
   V.innerHTML = `<button class="back" data-back>‹ Übungen</button>
    <div class="phase-h" style="--pc:var(${PH[e.ph].c})">${PH[e.ph].t}<span class="min">${PLACE[e.place]}</span></div>
    ${exCard(e)}
-   ${e.team_id && e.team_id === state.team.id && String(e.id).startsWith("own-") ? `<div class="btnrow"><span class="pill ok">Eigene Übung</span><button class="btn ghost danger" data-delex>Eigene Übung löschen</button></div>` : ""}
+   ${e.team_id && e.team_id === state.team.id && String(e.id).startsWith("own-") ? `<div class="btnrow"><span class="pill ok">Eigene Übung</span>${edOn() ? `<button class="btn ghost" data-editex>Bearbeiten</button>` : ""}<button class="btn ghost danger" data-delex>Eigene Übung löschen</button></div>` : ""}
    <p class="small muted">${usedIn.length ? "Eingeplant: " + usedIn.slice(0, 6).map(t => dparts(t.date).wd + " " + dparts(t.date).d + ". " + dparts(t.date).m).join(", ") + (usedIn.length > 6 ? " …" : "") : "In keinem kommenden Training eingeplant."}</p>`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "uebungen" });
   bindVideos();
+  const ee = V.querySelector("[data-editex]");
+  if (ee) ee.onclick = () => { edEx = edFrom(e); edHist = []; edPend = null; genTab = "edit"; libMode = "gen"; go({ tab: "uebungen" }); };
   const de = V.querySelector("[data-delex]");
   if (de) de.onclick = () => {
     if (usedIn.length) { toast("Diese Übung ist noch in Trainings eingeplant – zuerst dort tauschen", true); return; }
@@ -569,7 +571,8 @@ function viewGenerator(modeBar) {
     balls: activePlayers().length || 12, goals: "mini2", cones: true, hoops: true, mats: false, bibs: true, focus: "", diff: "" };
   const opt = (v, cur, l) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${l}</option>`;
   const chk = (k, l) => `<label class="chk"><input type="checkbox" name="${k}" ${o[k] ? "checked" : ""}> ${l}</label>`;
-  V.innerHTML = modeBar + `
+  if (genTab === "edit" && edOn()) return viewEditor(modeBar);
+  V.innerHTML = modeBar + genTabs() + `
    <div class="sec-head"><h2>Übungsgenerator</h2><span class="note">aus ${state.exercises.length} Übungen</span></div>
    <form class="card pad stack planf" id="genf">
      <p class="small muted">Beschreibe deine Situation. Die App sucht die passendste Übung aus der Bibliothek und passt sie an: Feldgrösse, Teams, Bälle, Tore, Material und Schwierigkeit nach dem Rad der Variation.</p>
@@ -590,7 +593,7 @@ function viewGenerator(modeBar) {
    ${genRes ? `<div class="phase-h" style="--pc:var(${PH[genRes.ph].c})">${PH[genRes.ph].t}<span class="min">${PLACE[genRes.place]} · ${genRes.gen.minutes}</span></div>
      ${exCard(genRes, 0, null, genRes.place, true)}
      <p class="small muted">Basis: ${esc(genRes.gen.baseName)}${genRes.gen.page ? ` (J+S-Manual S. ${esc(genRes.gen.page)})` : ""}. Bitte vor dem Einsatz kurz prüfen.</p>
-     <div class="btnrow"><button class="btn" data-gsave>Als eigene Übung speichern</button><button class="btn ghost" data-gbase="${genRes.gen.base}">Originalübung ansehen</button></div>`
+     <div class="btnrow"><button class="btn" data-gsave>Als eigene Übung speichern</button>${edOn() ? `<button class="btn ghost" data-gedit>Im Editor anpassen</button>` : ""}<button class="btn ghost" data-gbase="${genRes.gen.base}">Originalübung ansehen</button></div>`
     : `<p class="small muted card pad">Noch keine Übung erzeugt.</p>`}`;
   V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
   const f = V.querySelector("#genf");
@@ -609,6 +612,109 @@ function viewGenerator(modeBar) {
   const sv = V.querySelector("[data-gsave]");
   if (sv) sv.onclick = () => { const g = genRes; act(async () => { const id = await db.addOwnExercise(g); genRes = null; libMode = "ex"; go({ tab: "uebungen", exercise: id }); }, "Als eigene Übung gespeichert"); };
   const gb = V.querySelector("[data-gbase]"); if (gb) gb.onclick = () => go({ tab: "uebungen", exercise: gb.dataset.gbase });
+  const ge = V.querySelector("[data-gedit]"); if (ge) ge.onclick = () => { edEx = edFrom(genRes, true); genTab = "edit"; render(); };
+  bindGenTabs();
+}
+
+/* ================= Übungs-Editor ================= */
+// Eigene Übungen erfassen und ändern: Texte plus Skizze per Fingertipp
+let genTab = "gen", edEx = null, edTool = "A", edPend = null, edHist = [];
+// Vorerst nur in der Demo sichtbar, bis der Editor freigegeben ist
+const edOn = () => state.mode === "demo";
+const genTabs = () => !edOn() ? "" : `<div class="chips" role="group" aria-label="Generator oder Editor">${[["gen", "Übung erzeugen"], ["edit", "Eigene Übung erfassen"]].map(([k, l]) => `<button class="chip" data-gt="${k}" aria-pressed="${genTab === k}">${l}</button>`).join("")}</div>`;
+function bindGenTabs() { V.querySelectorAll("[data-gt]").forEach(b => b.onclick = () => { genTab = b.dataset.gt; render(); }); }
+const ED_TOOLS = [
+  ["A", "Team Rot", "dot a"], ["B", "Team Blau", "dot b"], ["J", "Joker", "dot j"], ["c", "Hütchen", "cone"],
+  ["ball", "Ball", "ball"], ["hoop", "Reifen", "hoop"], ["m", "Minitor", "mini"], ["G", "Grosses Tor", "goal"],
+  ["run", "Laufweg", "arr"], ["pass", "Pass", "arr dash"], ["drib", "Dribbling", "arr wave"], ["shot", "Schuss", "arr shot"],
+  ["del", "Löschen", "erase"]];
+const ED_ARROWS = ["run", "pass", "drib", "shot"];
+function edFrom(e, fromGen) {
+  const name = (e?.name || "").replace(/ – angepasst$/, "");
+  return { id: !fromGen && e?.id && String(e.id).startsWith("own-") ? e.id : null, name, ph: e?.ph || "sp", place: e?.place || "hall", both: !!e?.both,
+    org: e?.org || "", ablauf: e?.ablauf || [e?.offen, e?.ueben].filter(Boolean).join(" "), wett: e?.wett || "", coach: (e?.coach || []).join("\n"), var: e?.var || "",
+    items: JSON.parse(JSON.stringify(e?.d?.items || [])), full: !!e?.d?.full };
+}
+function edSketch() {
+  const d = { s: edEx.place === "hall" ? "hall" : "grass", full: edEx.full, items: edEx.items.concat(edPend ? [["ball", edPend[0], edPend[1]]] : []) };
+  return drawDiagram(d);
+}
+function viewEditor(modeBar) {
+  edEx ||= edFrom(null);
+  const x = edEx, opt = (v, cur, l) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`;
+  const ta = (k, l, rows, ph) => `<label class="lbl">${l}<textarea name="${k}" rows="${rows}" placeholder="${ph}">${esc(x[k])}</textarea></label>`;
+  V.innerHTML = modeBar + genTabs() + `
+   <div class="sec-head"><h2>${x.id ? "Eigene Übung bearbeiten" : "Eigene Übung erfassen"}</h2><span class="note">nur für ${esc(state.team.name)}</span></div>
+   <form class="card pad stack planf" id="edf">
+     <label class="lbl">Name<input name="name" required maxlength="80" value="${esc(x.name)}" placeholder="z. B. Fische fangen"></label>
+     <div class="frow">
+       <label class="lbl">Phase<select name="ph">${Object.entries({ auf: "Auffangen", ein: "Einleitung", sp: "Fussball spielen", le: "Fussball spielen lernen", vi: "Vielseitigkeit", aus: "Ausklang" }).map(([k, l]) => opt(k, x.ph, l)).join("")}</select></label>
+       <label class="lbl">Ort<select name="where">${opt("hall", x.both ? "" : x.place, "Halle")}${opt("grass", x.both ? "" : x.place, "Rasen")}${opt("both", x.both ? "both" : "", "Halle und Rasen")}</select></label></div>
+     <span class="lbl">Skizze</span>
+     <div class="edtools" role="toolbar" aria-label="Werkzeuge">${ED_TOOLS.map(([k, l, c]) => `<button type="button" class="edtool" data-tool="${k}" aria-pressed="${edTool === k}"><i class="ic ${c}" aria-hidden="true"></i>${l}</button>`).join("")}</div>
+     <div class="edfield" id="edfield" aria-label="Spielfeld: tippen, um das gewählte Element zu setzen">${edSketch()}</div>
+     <p class="small muted" id="edhint">${edHint()}</p>
+     <div class="btnrow"><button type="button" class="btn ghost small" data-ed="undo" ${edHist.length ? "" : "disabled"}>Rückgängig</button>
+       <button type="button" class="btn ghost small" data-ed="clear">Skizze leeren</button>
+       <label class="chk small"><input type="checkbox" name="full" ${x.full ? "checked" : ""}> Mittellinie und Strafräume</label></div>
+     ${ta("org", "Organisation", 2, "Feld, Material, Gruppen")}
+     ${ta("ablauf", "Ablauf", 4, "Was passiert, Schritt für Schritt")}
+     ${ta("wett", "Ziel / Wettkampf", 2, "Wer gewinnt? Was zählt?")}
+     ${ta("coach", "Coaching (ein Punkt pro Zeile)", 3, "Kopf hoch\nBeidfüssig")}
+     ${ta("var", "Variationen", 2, "leichter, schwerer, andere Regeln")}
+     <div class="btnrow"><button class="btn">${x.id ? "Änderungen speichern" : "Übung speichern"}</button><button type="button" class="btn ghost" data-ed="new">Neu beginnen</button></div>
+   </form>
+   <p class="small muted">Eigene Übungen sieht nur deine Mannschaft. Die Freigabe an andere Mannschaften läuft weiterhin über die Verwaltung.</p>`;
+  bindGenTabs();
+  V.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { libMode = b.dataset.mode; render(); });
+  const f = V.querySelector("#edf"), fld = V.querySelector("#edfield");
+  const read = () => { ["name", "org", "ablauf", "wett", "coach", "var"].forEach(k => x[k] = f[k].value); x.ph = f.ph.value;
+    x.both = f.where.value === "both"; x.place = x.both ? (x.place === "hall" ? "hall" : "grass") : f.where.value; x.full = f.full.checked; };
+  const redraw = () => { fld.innerHTML = edSketch(); V.querySelector("#edhint").textContent = edHint(); const u = V.querySelector('[data-ed="undo"]'); u.disabled = !edHist.length; };
+  f.oninput = () => { const pl = x.place, fu = x.full; read(); if (pl !== x.place || fu !== x.full) redraw(); };
+  V.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { edTool = b.dataset.tool; edPend = null;
+    V.querySelectorAll("[data-tool]").forEach(o => o.setAttribute("aria-pressed", o === b)); redraw(); });
+  fld.onclick = ev => {
+    const svg = fld.querySelector("svg"); if (!svg) return;
+    const r = svg.getBoundingClientRect(), cl = (v, a, b) => Math.min(b, Math.max(a, v)), q = v => Math.round(v * 2) / 2;
+    const px = q(cl((ev.clientX - r.left) / r.width * 110 - 5, 0, 100)), py = q(cl((ev.clientY - r.top) / r.height * 74 - 5, 0, 64));
+    const push = it => { edHist.push(JSON.stringify(x.items)); if (edHist.length > 40) edHist.shift(); x.items.push(it); };
+    if (edTool === "del") {
+      let best = -1, bd = 5;
+      x.items.forEach((it, i) => { const pts = ED_ARROWS.includes(it[0]) ? [[it[1], it[2]], [it[3], it[4]], [(it[1] + it[3]) / 2, (it[2] + it[4]) / 2]] : typeof it[1] === "number" ? [[it[1], it[2] ?? 32]] : it[0] === "G" ? [[it[1] === "L" ? 0 : 100, 32]] : [];
+        pts.forEach(([a, b]) => { const dd = Math.hypot(a - px, b - py); if (dd < bd) { bd = dd; best = i; } }); });
+      if (best >= 0) { edHist.push(JSON.stringify(x.items)); x.items.splice(best, 1); }
+    } else if (ED_ARROWS.includes(edTool)) {
+      if (!edPend) edPend = [px, py];
+      else { if (Math.hypot(edPend[0] - px, edPend[1] - py) > 2) push([edTool, edPend[0], edPend[1], px, py]); edPend = null; }
+    } else if (edTool === "ball") {
+      const pl = x.items.find(it => ["A", "B", "J"].includes(it[0]) && Math.hypot(it[1] - px, it[2] - py) < 3.5);
+      if (pl) { edHist.push(JSON.stringify(x.items)); pl[3] = pl[3] ? 0 : 1; } else push(["ball", px, py]);
+    } else if (edTool === "G") push(["G", px < 50 ? "L" : "R"]);
+    else if (edTool === "m") push(["m", px, py, px < 50 ? 1 : 0]);
+    else if (["A", "B", "J"].includes(edTool)) push([edTool, px, py, 0]);
+    else push([edTool, px, py]);
+    redraw();
+  };
+  V.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => {
+    const k = b.dataset.ed;
+    if (k === "undo" && edHist.length) { x.items = JSON.parse(edHist.pop()); edPend = null; redraw(); }
+    if (k === "clear" && x.items.length) { edHist.push(JSON.stringify(x.items)); x.items = []; edPend = null; redraw(); }
+    if (k === "new") { edEx = edFrom(null); edHist = []; edPend = null; render(); }
+  });
+  f.onsubmit = e => {
+    e.preventDefault(); read();
+    if (!x.name.trim()) { toast("Bitte einen Namen eingeben", true); return; }
+    const g = { ...x, coach: x.coach.split("\n").map(c => c.trim()).filter(Boolean), d: x.items.length ? { s: x.place === "hall" ? "hall" : "grass", ...(x.full ? { full: true } : {}), items: x.items } : null };
+    act(async () => { const id = await db.saveOwnExercise(g); edEx = null; edHist = []; edPend = null; genTab = "gen"; libMode = "ex"; go({ tab: "uebungen", exercise: id }); }, x.id ? "Übung gespeichert" : "Eigene Übung gespeichert");
+  };
+}
+function edHint() {
+  if (edTool === "del") return "Tippe auf ein Element, um es zu entfernen.";
+  if (ED_ARROWS.includes(edTool)) return edPend ? "Jetzt auf das Ziel des Pfeils tippen." : "Tippe auf den Start des Pfeils, danach auf das Ziel.";
+  if (edTool === "ball") return "Tippe ins Feld für einen Ball. Auf ein Kind tippen gibt ihm einen Ball (nochmals tippen nimmt ihn weg).";
+  if (edTool === "G") return "Tippe links oder rechts, um ein grosses Tor zu setzen.";
+  return "Tippe ins Feld, um das Element zu setzen.";
 }
 
 /* ================= Kader ================= */

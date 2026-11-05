@@ -402,6 +402,26 @@ export async function addOwnExercise(g) {
   state.exercises.push(normEx(row));
   return id;
 }
+// Übungs-Editor: eigene Übung neu anlegen oder bestehende eigene Übung ändern
+export async function saveOwnExercise(x) {
+  const data = { org: x.org, ablauf: x.ablauf, wett: x.wett, coach: x.coach, var: x.var, d: x.d, both: !!x.both, src: "Eigene Übung" };
+  Object.keys(data).forEach(k => (data[k] == null || data[k] === "" || (Array.isArray(data[k]) && !data[k].length)) && delete data[k]);
+  const fields = { place: x.place, phase: x.ph, name: x.name.trim(), data };
+  const old = x.id && state.exercises.find(e => e.id === x.id && e.team_id === TEAM && String(e.id).startsWith("own-"));
+  if (old) {
+    if (state.mode === "demo") { const r = ownDemo().find(r => r.id === x.id); if (r) Object.assign(r, fields); }
+    else await run(sb.from("exercises").update(fields).eq("id", x.id).eq("team_id", TEAM));
+    state.exercises[state.exercises.indexOf(old)] = normEx({ ...fields, id: x.id, team_id: TEAM, page: old.page, levels: old.levels, also_teams: old.also_teams });
+    if (state.mode === "demo") saveDemo();
+    return x.id;
+  }
+  const id = "own-" + uid().slice(0, 13).replace(/[^a-z0-9-]/gi, "");
+  const row = { id, team_id: TEAM, ...fields, page: null, levels: [state.team.level] };
+  if (state.mode === "demo") { state.exercises.push(normEx(row)); ownDemo().push(row); saveDemo(); return id; }
+  await run(sb.from("exercises").insert(row));
+  state.exercises.push(normEx(row));
+  return id;
+}
 export async function deleteOwnExercise(id) {
   state.exercises = state.exercises.filter(e => e.id !== id);
   if (state.mode === "demo") { const o = ownDemo(); o.splice(0, o.length, ...o.filter(r => r.id !== id)); return saveDemo(); }
