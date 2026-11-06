@@ -619,8 +619,8 @@ function viewGenerator(modeBar) {
 /* ================= Übungs-Editor ================= */
 // Eigene Übungen erfassen und ändern: Texte plus Skizze per Fingertipp
 let genTab = "gen", edEx = null, edTool = "A", edPend = null, edHist = [];
-// Vorerst nur in der Demo sichtbar, bis der Editor freigegeben ist
-const edOn = () => state.mode === "demo";
+// Übungs-Editor: für alle Trainer freigegeben (06.11.2026)
+const edOn = () => true;
 const genTabs = () => !edOn() ? "" : `<div class="chips" role="group" aria-label="Generator oder Editor">${[["gen", "Übung erzeugen"], ["edit", "Eigene Übung erfassen"]].map(([k, l]) => `<button class="chip" data-gt="${k}" aria-pressed="${genTab === k}">${l}</button>`).join("")}</div>`;
 function bindGenTabs() { V.querySelectorAll("[data-gt]").forEach(b => b.onclick = () => { genTab = b.dataset.gt; render(); }); }
 const ED_TOOLS = [
