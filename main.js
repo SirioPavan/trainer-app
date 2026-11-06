@@ -519,7 +519,9 @@ function viewTemplates() {
     + `<p class="small muted">Eine Vorlage ist ein komplettes Training. Unter «Planung → + Training hinzufügen» legst du mit einer Vorlage ein Training an einem bestimmten Tag an.</p>`;
 }
 function viewLibrary() {
-  const modeBar = `<div class="seg" role="tablist" aria-label="Ansicht">${[["ex", "Übungen"], ["gen", "Generator"], ["tpl", "Vorlagen"]].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${libMode === k}">${l}</button>`).join("")}</div>`;
+  // Generator und Übungs-Editor nur für Admins
+  if (libMode === "gen" && !isAdmin()) libMode = "ex";
+  const modeBar = `<div class="seg" role="tablist" aria-label="Ansicht">${[["ex", "Übungen"], ...(isAdmin() ? [["gen", "Generator"]] : []), ["tpl", "Vorlagen"]].map(([k, l]) => `<button role="tab" data-mode="${k}" aria-selected="${libMode === k}">${l}</button>`).join("")}</div>`;
   if (libMode === "gen") return viewGenerator(modeBar);
   if (libMode === "tpl") {
     V.innerHTML = modeBar + viewTemplates();
@@ -549,7 +551,7 @@ function viewExercise(id) {
   V.innerHTML = `<button class="back" data-back>‹ Übungen</button>
    <div class="phase-h" style="--pc:var(${PH[e.ph].c})">${PH[e.ph].t}<span class="min">${PLACE[e.place]}</span></div>
    ${exCard(e)}
-   ${e.team_id && e.team_id === state.team.id && String(e.id).startsWith("own-") ? `<div class="btnrow"><span class="pill ok">Eigene Übung</span>${edOn() ? `<button class="btn ghost" data-editex>Bearbeiten</button>` : ""}<button class="btn ghost danger" data-delex>Eigene Übung löschen</button></div>` : ""}
+   ${e.team_id && e.team_id === state.team.id && String(e.id).startsWith("own-") ? `<div class="btnrow"><span class="pill ok">Eigene Übung</span>${isAdmin() ? `<button class="btn ghost" data-editex>Bearbeiten</button><button class="btn ghost danger" data-delex>Eigene Übung löschen</button>` : ""}</div>` : ""}
    <p class="small muted">${usedIn.length ? "Eingeplant: " + usedIn.slice(0, 6).map(t => dparts(t.date).wd + " " + dparts(t.date).d + ". " + dparts(t.date).m).join(", ") + (usedIn.length > 6 ? " …" : "") : "In keinem kommenden Training eingeplant."}</p>`;
   V.querySelector("[data-back]").onclick = () => history.length > 1 ? history.back() : go({ tab: "uebungen" });
   bindVideos();
@@ -619,8 +621,8 @@ function viewGenerator(modeBar) {
 /* ================= Übungs-Editor ================= */
 // Eigene Übungen erfassen und ändern: Texte plus Skizze per Fingertipp
 let genTab = "gen", edEx = null, edTool = "A", edPend = null, edHist = [];
-// Übungs-Editor: für alle Trainer freigegeben (06.11.2026)
-const edOn = () => true;
+// Übungs-Editor: nur für Admins (06.11.2026)
+const edOn = () => isAdmin();
 const genTabs = () => !edOn() ? "" : `<div class="chips" role="group" aria-label="Generator oder Editor">${[["gen", "Übung erzeugen"], ["edit", "Eigene Übung erfassen"]].map(([k, l]) => `<button class="chip" data-gt="${k}" aria-pressed="${genTab === k}">${l}</button>`).join("")}</div>`;
 function bindGenTabs() { V.querySelectorAll("[data-gt]").forEach(b => b.onclick = () => { genTab = b.dataset.gt; render(); }); }
 const ED_TOOLS = [
