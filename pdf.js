@@ -73,10 +73,27 @@ function headBand(title, sub, right) {
 }
 
 /* ---------- Rendern ---------- */
+// Safari (iPhone/iPad) schneidet SVG-Bilder in html2canvas ab. Deshalb jede Skizze
+// vorher selbst in ein PNG mit fester Grösse umwandeln – das zeichnen alle Browser gleich.
+async function svgToPng() {
+  const imgs = [...document.querySelectorAll('.pdfhost img[src^="data:image/svg+xml"]')];
+  await Promise.all(imgs.map(async i => {
+    try {
+      if (!i.complete || !i.naturalWidth) await new Promise((r, x) => { i.onload = r; i.onerror = x; });
+      const w = i.width, h = i.height, f = 3;
+      const c = document.createElement("canvas");
+      c.width = w * f; c.height = h * f;
+      c.getContext("2d").drawImage(i, 0, 0, c.width, c.height);
+      const png = c.toDataURL("image/png");
+      await new Promise(r => { i.onload = i.onerror = r; i.src = png; });
+    } catch { /* Skizze bleibt als SVG */ }
+  }));
+}
 async function render(pages, orient, name) {
   await loadLib();
   if (document.fonts?.ready) await document.fonts.ready;
   await Promise.all([...pages[0].ownerDocument.querySelectorAll(".pdfhost img")].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  await svgToPng();
   const [w] = SIZE[orient];
   const opt = { margin: 0, filename: name, image: { type: "jpeg", quality: 0.92 },
     html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
