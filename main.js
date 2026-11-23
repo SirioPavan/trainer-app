@@ -1254,7 +1254,7 @@ function viewHilfe() {
   if (!box) return;
   const show = l => {
     box.innerHTML = l.length ? l.map(f => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="mid"><b style="white-space:pre-wrap;font-weight:600${f.done ? ";opacity:.55" : ""}">${esc(f.body)}</b><span>${esc(f.author || "Unbekannt")} · ${esc(f.team_id || "")} · ${new Date(f.created_at).toLocaleDateString("de-CH")}</span></span>
+      <span class="mid"><b class="fbtext" style="white-space:pre-wrap;font-weight:600${f.done ? ";opacity:.55" : ""}">${esc(f.body)}</b><span>${esc(f.author || "Unbekannt")} · ${esc(f.team_id || "")} · ${new Date(f.created_at).toLocaleDateString("de-CH")}</span></span>
       <span class="stackr"><button class="linkbtn" data-fbd="${esc(f.id)}" data-v="${f.done ? 0 : 1}">${f.done ? "Wieder öffnen" : "Erledigt"}</button>
       <button class="linkbtn" data-fbx="${esc(f.id)}">${fbDel === f.id ? "Wirklich löschen?" : "Löschen"}</button></span></div>`).join("") : `<p class="empty">Noch keine Vorschläge.</p>`;
     box.querySelectorAll("[data-fbx]").forEach(b => b.onclick = () => { if (fbDel !== b.dataset.fbx) { fbDel = b.dataset.fbx; show(fbList || l); return; }
