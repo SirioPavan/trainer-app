@@ -646,4 +646,5 @@ body[data-view="trainings"] main>.card.list>.row{background:var(--surface);borde
 .hvid{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .hvid summary{display:flex;gap:10px;align-items:center;cursor:pointer;list-style:none}.hvid summary::-webkit-details-marker{display:none}
 .hvplay{flex:none;width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;padding-left:2px}
-.hvid video{display:block;width:100%;max-width:340px;margin:10px auto 0;border-radius:14px;background:#141414;aspect-ratio:780/1688}
+.hvid video{display:block;height:min(calc(100vh - 230px),640px);height:min(calc(100dvh - 230px),640px);width:auto;max-width:100%;margin:10px auto 0;border-radius:14px;background:#141414;aspect-ratio:780/1688;object-fit:contain}
+@media (orientation:landscape) and (max-height:600px){.hvid video{height:calc(100vh - 24px);height:calc(100dvh - 24px)}}

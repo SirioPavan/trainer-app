@@ -161,8 +161,9 @@ async function load() {
     await loadDocs();
   }
   // Feedback: Besitzer der App sieht offene Vorschläge (Tabelle ab 26)
-  { const o = await sb.rpc("am_app_owner"); state.owner = !o.error && o.data === true;
-    if (state.owner) { const f = await sb.from("feedback").select("id", { count: "exact", head: true }).eq("done", false); state.fbOpen = f.count || 0; } }
+  // nicht blockierend: die App ist schon bedienbar, die rote Zahl kommt nach
+  sb.rpc("am_app_owner").then(async o => { state.owner = !o.error && o.data === true;
+    if (state.owner) { const f = await sb.from("feedback").select("id", { count: "exact", head: true }).eq("done", false); state.fbOpen = f.count || 0; emit(); } }).catch(() => {});
 }
 
 /* ================= J+S-Coach: Vereinsübersicht ================= */

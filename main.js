@@ -1218,6 +1218,7 @@ const HELP = [
 ];
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
+  "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "39 Sek.", false]],
   "Planung und Training": [["training-pdf", "Training als PDF", "30 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "1 Min.", true]],
@@ -1226,7 +1227,7 @@ const HELP_VIDEOS = {
 };
 const helpVideos = h => (HELP_VIDEOS[h] || []).filter(v => !v[3] || isAdmin()).map(([f, t, d]) =>
   `<details class="hvid"><summary><span class="hvplay" aria-hidden="true">▶</span><span><b>Video: ${t}</b><span class="small muted"> · ${d}</span></span></summary>
-   <video controls playsinline preload="none" poster="videos/${f}.jpg" src="videos/${f}.mp4"></video></details>`).join("");
+   <video controls playsinline preload="none" poster="videos/${f}.jpg" data-src="videos/${f}.mp4"></video></details>`).join("");
 let fbList = null, fbDel = null;
 function viewHilfe() {
   const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
@@ -1248,6 +1249,8 @@ function viewHilfe() {
      <p class="small muted">Geht direkt an die Entwickler der App. Danke!</p></form>
    ${state.owner ? `<section class="card pad stack" id="pushbox"><h3>Push-Nachricht bei neuen Vorschlägen</h3><p class="small muted" id="pushst">Prüfe …</p><div class="btnrow" id="pushbtns"></div></section>` : ""}
    ${state.owner ? `<div class="sec-head"><h2>Eingegangene Vorschläge</h2><span class="note">${state.fbOpen || 0} offen</span></div><div class="card list" id="fbl"><p class="empty">Lade …</p></div>` : ""}`;
+  V.querySelectorAll(".hvid").forEach(d => d.ontoggle = () => { const v = d.querySelector("video");
+    if (d.open && !v.src) { v.src = v.dataset.src; v.preload = "metadata"; } if (!d.open) v.pause(); });
   V.querySelector("#fbf").onsubmit = e => { e.preventDefault(); const t = V.querySelector("#fbt");
     act(async () => { await db.sendFeedback(t.value); t.value = ""; fbList = null; }, "Danke! Vorschlag gesendet"); };
   const pb = V.querySelector("#pushbox");
