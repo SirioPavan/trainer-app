@@ -20,6 +20,12 @@ const ex = id => state.exercises.find(e => e.id === id);
 const activePlayers = () => state.players.filter(p => p.active !== false);
 const attCount = t => Object.entries(state.attendance[t.id] || {}).filter(([pid, v]) => v && activePlayers().some(p => p.id === pid)).length;
 const isAdmin = () => state.role === "admin";
+// J+S-Coach: sieht alle Mannschaften wie ein Trainer, darf zusätzlich Trainer/innen einladen.
+// Anwesenheit kann sie im Notfall erfassen (wie jede Trainerin). Planung bleibt bei den Admins.
+const isCoach = () => state.role === "coach";
+const canInvite = () => isAdmin() || isCoach();
+const ROLE_NAME = { admin: "Admin", coach: "J+S-Coach", trainer: "Trainer/in" };
+const crewPeople = () => state.people.filter(p => p.role !== "coach");   // Coach zählt nicht als Leiter/in
 
 const WDL = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"], MOL = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 function inDays(iso) { const d = Math.round((new Date(iso + "T12:00:00") - new Date(db.today() + "T12:00:00")) / 864e5); return d === 0 ? " · heute" : d === 1 ? " · morgen" : d > 1 ? ` · in ${d} Tagen` : ""; }
@@ -72,7 +78,7 @@ navEl.addEventListener("click", e => { const b = e.target.closest("button"); if 
 function render(keepScroll) {
   const y = window.scrollY;
   const nav = document.querySelector(".nav"), top = document.querySelector(".top");
-  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isAdmin() ? "Admin" : "Trainer");
+  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isAdmin() ? "Admin" : isCoach() ? "J+S-Coach" : "Trainer");
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
   const tn = document.getElementById("teamName");
   if (state.teams?.length > 1 && state.user) {
@@ -178,7 +184,7 @@ function viewDashboard() {
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
    ${past.length ? `<details class="card pad" ${pastOpen ? "open" : ""} data-pastbox><summary class="lbl">Vergangene Trainings (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(rowT).join("")}</div></details>` : ""}
-   ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
+   ${isAdmin() ? planBox(td) : isCoach() ? `<p class="small muted card pad">Als J+S-Coach siehst du alle Trainings dieser Mannschaft. Die Anwesenheit erfassen die Trainer/innen; du kannst sie im Notfall nachtragen. Trainer/innen lädst du unter «Kader» ein.</p>` : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
@@ -314,11 +320,11 @@ function bindPlanBox() {
 
 /* ================= Trainer-Einsatz ================= */
 const AV = { yes: ["✓", "dabei", "ok"], maybe: ["?", "unsicher", "wait"], no: ["✗", "abwesend", "bad"] };
-const crewOn = () => state.people.some(p => p.default_days?.length) || Object.keys(state.avail || {}).length > 0;
+const crewOn = () => crewPeople().some(p => p.default_days?.length) || Object.keys(state.avail || {}).length > 0;
 // Wer ist bei diesem Termin dabei? Ausdrückliche Angabe vor Einsatztag
 function crew(ev) {
   const wd = new Date(ev.date + "T12:00:00").getDay(), av = (state.avail || {})[ev.id] || {};
-  return state.people.map(p => { const o = p.user_id ? av[p.user_id] : null, planned = (p.default_days || []).includes(wd);
+  return crewPeople().map(p => { const o = p.user_id ? av[p.user_id] : null, planned = (p.default_days || []).includes(wd);
     return { p, planned, st: o?.status || (planned ? "yes" : null), note: o?.note || "", own: !!o }; });
 }
 const crewYes = ev => crew(ev).filter(c => c.st === "yes").length;
@@ -329,7 +335,7 @@ function crewChip(ev) {
 }
 function crewSection(ev) {
   const list = crew(ev), n = list.filter(c => c.st === "yes").length, min = state.team.minTrainers ?? 2, me = state.user?.id;
-  if (!state.people.length) return "";
+  if (!crewPeople().length) return "";
   return `<section class="card pad stack crewbox">
     <div class="sec-head"><h3>Trainer-Einsatz</h3><span class="pill ${n < min ? "bad" : "ok"}">${n} dabei${n < min ? " · zu wenig" : ""}</span></div>
     <div class="crewlist">${list.map(c => { const mine = c.p.user_id && c.p.user_id === me, edit = c.p.user_id && (mine || isAdmin());
@@ -426,7 +432,7 @@ let editT = null;
 /* Anwesenheit (Kinder + Leiter/innen) – für Trainings und Turniere gleich */
 function attSection(id) {
   const a = state.attendance[id] || {}, ap = activePlayers(), c = attCount({ id }), n = ap.length;
-  const L = state.people.filter(p => p.user_id), la = state.leaders[id] || {}, lc = L.filter(p => la[p.user_id]).length;
+  const L = crewPeople().filter(p => p.user_id), la = state.leaders[id] || {}, lc = L.filter(p => la[p.user_id]).length;
   const chip = (attr, key, on, label) => `<button ${attr}="${key}" data-ev="${id}" aria-pressed="${!!on}"><span class="dot">${on ? "✓" : ""}</span><span>${esc(label)}</span></button>`;
   return `<section class="card pad stack">
      <div class="sec-head"><h3>Anwesenheit</h3><span class="pill ${c ? "ok" : "open"}">${c}/${n} da${L.length ? ` · ${lc} Leiter` : ""}</span></div>
@@ -812,7 +818,7 @@ let ndsP = null;
 function ndsBox() {
   const td = db.today(), from = td.slice(0, 4) + (td.slice(5, 7) >= "07" ? "-08-01" : "-01-01"), ort = ndsOrt();
   const r = db.ndsExport(from, td, ort);
-  const noNr = state.people.filter(p => p.user_id && !p.nds_id).map(p => p.display_name || p.email);
+  const noNr = crewPeople().filter(p => p.user_id && !p.nds_id).map(p => p.display_name || p.email);
   return `<section class="card pad stack"><div class="sec-head"><h3>NDS-Export</h3><span class="note">J+S-Anwesenheit</span></div>
     <p class="small">Erstellt die CSV-Dateien genau nach den NDS-Vorlagen. Trainings gehen als «Training» (mit Zeit, Dauer, Ort), Turniere als «Wettkampf» (ohne Zeit, Dauer, Ort) hinaus.</p>
     <form class="stack" id="ndsx">
@@ -880,13 +886,13 @@ function viewKader() {
    ${isAdmin() ? importBox() + ndsBox() : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${p.role === "admin" ? "Admin" : "Trainer/in"}</span>
+      <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${ROLE_NAME[p.role] || "Trainer/in"}</span>
         ${p.user_id ? `<span>NDS-Nr.: ${p.nds_id ? esc(p.nds_id) : "<i>fehlt</i>"}${isAdmin() || p.user_id === state.user?.id ? ` · <button class="linkbtn" data-ndsed="${i}">${ndsEd === i ? "Schliessen" : "Eintragen"}</button>` : ""}</span>` : ""}
         ${(() => { const can = isAdmin() || (p.user_id && p.user_id === state.user?.id), D = [1, 2, 3, 4, 5, 6, 0], dn = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
           return `<span class="days" aria-label="Einsatztage">Einsatz: ${D.map(d => `<button class="day" ${can ? "" : "disabled"} data-pday="${i}" data-d="${d}" aria-pressed="${(p.default_days || []).includes(d)}">${dn[d]}</button>`).join("")}</span>`; })()}
         ${ndsEd === i ? `<form class="inline" data-ndsf="${i}" style="margin-top:6px"><input name="nr" inputmode="numeric" value="${esc(p.nds_id || "")}" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer"><button class="btn">Speichern</button></form>` : ""}</span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
-      ${isAdmin() && p.pending ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
+      ${canInvite() && p.pending && (isAdmin() || p.role === "trainer") ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
       ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
       ${shareFor === p.email ? shareBox(p) : ""}`).join("")}</div>
    <section class="card pad stack planf">
@@ -898,10 +904,10 @@ function viewKader() {
      ${isAdmin() ? `<form class="stack" id="minf"><span class="lbl">Warnung, wenn weniger Trainer dabei sind als</span>
        <div class="frow"><input type="number" name="n" min="0" max="10" value="${state.team.minTrainers ?? 2}" aria-label="Mindestanzahl Trainer"><button class="btn ghost">Speichern</button></div></form>` : ""}
    </section>
-   ${isAdmin() ? `<form class="inline card pad" id="inv">
+   ${canInvite() ? `<form class="inline card pad" id="inv">
       <input id="ie" type="email" required placeholder="E-Mail der Trainerin / des Trainers" aria-label="E-Mail">
       <input id="iname" placeholder="Name" aria-label="Name">
-      <select id="irole" aria-label="Rolle"><option value="trainer">Trainer/in</option><option value="admin">Admin (darf einladen)</option></select>
+      <select id="irole" aria-label="Rolle"><option value="trainer">Trainer/in</option>${isAdmin() ? `<option value="admin">Admin (darf einladen)</option>` : ""}</select>
       <button class="btn">Einladen</button></form>
       <p class="small muted">«Einladen» schaltet die E-Mail frei. Danach schickst du der Person die Einladungsnachricht (per WhatsApp, E-Mail oder kopiert). Sie öffnet die App, tippt auf «Erstes Mal hier?» und erstellt mit genau dieser E-Mail ein Konto mit eigenem Passwort.</p>` : ""}
    ${state.mode === "cloud" ? `<details class="card pad addbox"><summary class="lbl">Mein Passwort festlegen / ändern</summary>

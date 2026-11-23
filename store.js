@@ -560,7 +560,7 @@ export function ndsExport(from, to, ort = NDS_ORT_DEFAULT) {
   let kidRows = 0, leaderRows = 0;
   for (const e of ev) {
     const base = [chDate(e.date), e.typ, e.zeit, e.dauer, e.ort];
-    for (const p of state.people.filter(x => x.user_id && (state.leaders[e.id] || {})[x.user_id])) {
+    for (const p of state.people.filter(x => x.user_id && x.role !== "coach" && (state.leaders[e.id] || {})[x.user_id])) {
       if (!p.nds_id) { missingLeaders.add(p.display_name || p.email); continue; }
       rows.push([p.nds_id, "Leiter/in", ...base]); leaderRows++;
     }
