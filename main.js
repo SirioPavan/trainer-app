@@ -92,7 +92,8 @@ function render(keepScroll) {
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
   const tn = document.getElementById("teamName");
   if (state.teams?.length > 1 && state.user) {
-    tn.innerHTML = `<select class="teamsel" aria-label="Mannschaft wechseln">${state.teams.map(t => `<option value="${t.id}" ${t.id === state.team.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`;
+    const opt = t => `<option value="${esc(t.id)}" ${t.id === state.team.id ? "selected" : ""}>${esc(t.name)}</option>`;
+    tn.innerHTML = `<select class="teamsel" aria-label="Mannschaft wechseln">${state.teams.length <= 5 ? state.teams.map(opt).join("") : teamGroups().map(([lv, l]) => `<optgroup label="${esc(LEVEL_NAME[lv] || lv)}">${l.map(opt).join("")}</optgroup>`).join("")}</select>`;
     tn.firstChild.onchange = e => { route = { tab: isCoach() ? (COACH_TABS.includes(route.tab) && route.tab !== "hilfe" ? route.tab : "anwesenheit") : "trainings" }; history.replaceState(route, ""); db.switchTeam(e.target.value); };
   } else tn.textContent = state.team.name;
   document.querySelector(".top .club")?.classList.toggle("multi", !!(state.teams?.length > 1 && state.user));
@@ -1249,7 +1250,7 @@ function viewHilfe() {
 }
 
 /* ================= Super-Admin-Cockpit (J+S-Coach) ================= */
-let ck = null, ckOpen = null, ckShare = null, ckRm = null;
+let ck = null, ckOpen = null, ckShare = null, ckRm = null, ckNew = false;
 async function loadCockpit() { const [stats, people] = await Promise.all([db.clubStats(), db.clubOverview()]); ck = { stats, people }; }
 function viewCockpit() {
   if (!isCoach()) { go({ tab: "trainings" }); return; }
@@ -1270,6 +1271,12 @@ function viewCockpit() {
      <input name="email" type="email" required placeholder="E-Mail" aria-label="E-Mail"><input name="name" placeholder="Name" aria-label="Name">
      <button class="btn">Freischalten und per WhatsApp einladen</button></form>
    ${ckShare ? `<div class="card pad">${shareBox(ckShare, ckShare.team_name)}</div>` : ""}
+   <details class="card pad" id="cknew" ${ckNew ? "open" : ""}><summary class="lbl">+ Mannschaft anlegen</summary>
+     <form class="stack" id="ckteam" style="margin-top:10px">
+       <div class="frow"><input name="name" required maxlength="40" placeholder="Name, z. B. Ea-Junioren" aria-label="Name der Mannschaft">
+       <select name="level" aria-label="Stufe"><option value="G">G-Junioren</option><option value="F">F-Junioren</option><option value="E" selected>E-Junioren</option><option value="EW">Juniorinnen (E)</option><option value="D">D-Junioren</option></select></div>
+       <button class="btn">Mannschaft anlegen</button>
+       <p class="small muted">Die Mannschaft bekommt die Übungen und Trainingsvorlagen ihrer Stufe. Danach oben gleich einen Admin einladen.</p></form></details>
    ${teams.map(t => `<section class="card ckteam ${t.warn.length ? "warn" : ""}">
      <button class="ckhead" data-ckt="${esc(t.team_id)}" aria-expanded="${ckOpen === t.team_id}">
        <span class="mid"><b>${esc(t.team_name)}</b><span>${t.kids} Kinder · ${t.adm} Admin · ${t.tr} Trainer/innen${t.pend ? ` · ${t.pend} eingeladen` : ""}</span></span>
@@ -1295,6 +1302,11 @@ function viewCockpit() {
     act(async () => { await db.removeFromTeam(t.team_id, p); await loadCockpit(); if (t.team_id === state.team.id) await db.switchTeam(t.team_id); }, `${p.display_name || p.email} entfernt`); });
   V.querySelectorAll("[data-ckgo]").forEach(b => b.onclick = () => { route = { tab: "anwesenheit" }; history.replaceState(route, ""); db.switchTeam(b.dataset.ckgo); });
   V.querySelector("[data-ckreload]").onclick = () => { ck = null; ckShare = null; render(); };
+  const nt = V.querySelector("#ckteam");
+  V.querySelector("#cknew").ontoggle = e => { ckNew = e.target.open; };
+  nt.onsubmit = e => { e.preventDefault(); const name = nt.name.value.trim(), level = nt.level.value;
+    act(async () => { const id = await db.createTeam(name, level); ckNew = false; ck = null; route = { tab: "cockpit" }; await loadCockpit().catch(() => {});
+      setTimeout(() => { const s = V.querySelector("#ckinv [name=team]"); if (s) s.value = id; }, 50); }, `${name} angelegt – jetzt einen Admin einladen`); };
   const f = V.querySelector("#ckinv");
   f.onsubmit = e => { e.preventDefault(); const t = teams.find(x => x.team_id === f.team.value), email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(), role = f.role.value;
     act(async () => { await db.inviteToTeam(t.team_id, email, name, role); ckShare = { email, display_name: name, role, team_name: t.team_name }; await loadCockpit().catch(() => {}); }, "Freigeschaltet – jetzt per WhatsApp senden"); };
@@ -1302,7 +1314,13 @@ function viewCockpit() {
 }
 
 /* ================= Mannschaft wählen (gut sichtbar, v. a. für den J+S-Coach) ================= */
-const teamPick = () => state.teams?.length > 1 && state.user ? `<div class="chips teampick" role="group" aria-label="Mannschaft wählen">${state.teams.map(t => `<button class="chip" data-tpick="${esc(t.id)}" aria-pressed="${t.id === state.team.id}">${esc(t.name)}</button>`).join("")}</div>` : "";
+const LEVEL_NAME = { G: "G-Junioren", F: "F-Junioren", E: "E-Junioren", EW: "Juniorinnen", D: "D-Junioren" }, LEVEL_ORDER = ["G", "F", "E", "EW", "D"];
+const teamGroups = () => { const g = {}; (state.teams || []).forEach(t => (g[t.level] ||= []).push(t));
+  return Object.entries(g).sort((a, b) => (LEVEL_ORDER.indexOf(a[0]) + 99) % 99 - (LEVEL_ORDER.indexOf(b[0]) + 99) % 99); };
+const teamPick = () => { if (!(state.teams?.length > 1 && state.user)) return "";
+  const btn = t => `<button class="chip" data-tpick="${esc(t.id)}" aria-pressed="${t.id === state.team.id}">${esc(t.name)}</button>`;
+  return state.teams.length <= 5 ? `<div class="chips teampick" role="group" aria-label="Mannschaft wählen">${state.teams.map(btn).join("")}</div>`
+    : `<div class="teampick tpgroups" role="group" aria-label="Mannschaft wählen">${teamGroups().map(([lv, l]) => `<div><span class="tplbl">${esc(LEVEL_NAME[lv] || lv)}</span><div class="chips">${l.map(btn).join("")}</div></div>`).join("")}</div>`; };
 function bindTeamPick() { V.querySelectorAll("[data-tpick]").forEach(b => b.onclick = () => { if (b.dataset.tpick !== state.team.id) db.switchTeam(b.dataset.tpick); }); }
 
 /* ================= Anwesenheit (Ansicht J+S-Coach) ================= */

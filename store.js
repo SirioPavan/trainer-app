@@ -177,6 +177,18 @@ export async function clubStats() {
     return DEMO_TEAMS.map((t, i) => ({ team_id: t.id, team_name: t.name, kids: [15, 12, 18, 11][i] ?? 10, next_training: d, last_attendance: i === 2 ? null : l, past30: 8, with_att30: [8, 6, 0, 7][i] ?? 5, tournaments_open: i })); }
   const { data, error } = await sb.rpc("club_stats"); if (error) throw error; return data || [];
 }
+export async function createTeam(name, level) {
+  name = String(name || "").trim();
+  if (name.length < 2) throw new Error("Bitte einen Namen eingeben, z. B. «Ea-Junioren»");
+  if (state.teams.some(t => t.name.toLowerCase() === name.toLowerCase())) throw new Error("Diese Mannschaft gibt es schon");
+  if (state.mode === "demo") {
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "team";
+    DEMO_TEAMS.push({ id, name, level, ...(level === "EW" ? { levels: ["EW", "E", "G"] } : {}), role: state.role });
+    loadDemo(); emit(); return id;
+  }
+  const { data, error } = await sb.rpc("create_team", { p_name: name, p_level: level }); if (error) throw error;
+  await load(); emit(); return data;
+}
 export async function inviteToTeam(teamId, email, displayName, role) {
   email = String(email || "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Bitte eine gültige E-Mail eingeben");
