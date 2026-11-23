@@ -1,6 +1,6 @@
 // Service Worker: hält die App-Dateien bereit, damit sie schnell startet.
 // Daten kommen immer frisch aus der Datenbank (werden nicht zwischengespeichert).
-const CACHE = "fcs-trainer-v62";
+const CACHE = "fcs-trainer-v63";
 const SHELL = ["./", "index.html", "styles.css", "config.js", "main.js", "store.js", "diagram.js", "pdf.js", "plan.js", "gen.js",
   "wissen.js", "seed-data.js", "manifest.webmanifest", "logo-white.png", "icon-192-v3.png", "apple-touch-icon-v3.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())));
@@ -8,6 +8,7 @@ self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Prom
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return; // Datenbank & CDN direkt
+  if (url.pathname.includes("/videos/")) return; // Videos direkt (Safari braucht Teil-Anfragen)
   // Zuerst Netz (immer aktuelle Version, am Browser-Zwischenspeicher vorbei), bei Funkloch aus dem Speicher
   e.respondWith(fetch(e.request.url, { cache: "no-cache", credentials: "same-origin" }).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); return r; })
     .catch(() => caches.match(e.request)));

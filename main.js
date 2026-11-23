@@ -1216,6 +1216,17 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
+// How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
+const HELP_VIDEOS = {
+  "Planung und Training": [["training-pdf", "Training als PDF", "30 Sek.", false]],
+  "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
+  "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "1 Min.", true]],
+  "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "37 Sek.", true]],
+  "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["nds-export", "NDS-Export", "37 Sek.", true]]
+};
+const helpVideos = h => (HELP_VIDEOS[h] || []).filter(v => !v[3] || isAdmin()).map(([f, t, d]) =>
+  `<details class="hvid"><summary><span class="hvplay" aria-hidden="true">▶</span><span><b>Video: ${t}</b><span class="small muted"> · ${d}</span></span></summary>
+   <video controls playsinline preload="none" poster="videos/${f}.jpg" src="videos/${f}.mp4"></video></details>`).join("");
 let fbList = null, fbDel = null;
 function viewHilfe() {
   const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
@@ -1228,7 +1239,7 @@ function viewHilfe() {
   const SECS = isCoach() ? [...COACH_HELP, HELP.find(h => h[0] === "Erste Schritte"), HELP.find(h => h[0] === "Probleme")] : HELP;
   V.innerHTML = `
    <div class="sec-head"><h2>Hilfe</h2><span class="note">So funktioniert die App</span></div>
-   <div class="stack">${SECS.map(([h, l], i) => `<details class="card pad helpsec" ${i === 0 ? "open" : ""}><summary class="lbl">${h}</summary><ul class="helplist">${items(l)}</ul></details>`).join("")}</div>
+   <div class="stack">${SECS.map(([h, l], i) => `<details class="card pad helpsec" ${i === 0 ? "open" : ""}><summary class="lbl">${h}</summary><ul class="helplist">${items(l)}</ul>${helpVideos(h)}</details>`).join("")}</div>
    <div class="sec-head"><h2>Feedback</h2><span class="note">Ideen und Fehler melden</span></div>
    <form class="card pad stack" id="fbf">
      <label class="lbl" for="fbt">Was können wir verbessern?</label>
