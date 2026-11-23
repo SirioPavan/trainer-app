@@ -1234,7 +1234,7 @@ function viewHilfe() {
      <label class="lbl" for="fbt">Was können wir verbessern?</label>
      <textarea id="fbt" rows="4" maxlength="2000" required placeholder="z. B. «Bei Turnieren wäre ein Feld für den Treffpunkt praktisch»"></textarea>
      <button class="btn">Vorschlag senden</button>
-     <p class="small muted">Geht direkt an den Entwickler der App. Danke!</p></form>
+     <p class="small muted">Geht direkt an die Entwickler der App. Danke!</p></form>
    ${state.owner ? `<section class="card pad stack" id="pushbox"><h3>Push-Nachricht bei neuen Vorschlägen</h3><p class="small muted" id="pushst">Prüfe …</p><div class="btnrow" id="pushbtns"></div></section>` : ""}
    ${state.owner ? `<div class="sec-head"><h2>Eingegangene Vorschläge</h2><span class="note">${state.fbOpen || 0} offen</span></div><div class="card list" id="fbl"><p class="empty">Lade …</p></div>` : ""}`;
   V.querySelector("#fbf").onsubmit = e => { e.preventDefault(); const t = V.querySelector("#fbt");
