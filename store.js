@@ -202,6 +202,32 @@ export async function removeFromTeam(teamId, p) {
   if (p.user_id) await run(sb.from("team_members").delete().eq("team_id", teamId).eq("user_id", p.user_id));
 }
 
+/* ================= Push (nur App-Besitzer) ================= */
+const VAPID_PUBLIC = "BG9nAomsXSMaY49SzRK4-LoEi74sUPNJKJnfpNA2wt6cd9XZIztCiHEDhkq_hvURYyJFGDbA6OTxnGd8Yb5FHVw";
+const b64u = s => { const p = "=".repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+export const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+export async function pushState() {
+  if (!pushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription();
+  return sub ? "on" : "off";
+}
+export async function enablePush() {
+  if (!pushSupported()) throw new Error("Dieses Gerät unterstützt keine Push-Nachrichten (iPhone: App zuerst zum Home-Bildschirm hinzufügen)");
+  if (await Notification.requestPermission() !== "granted") throw new Error("Mitteilungen wurden nicht erlaubt");
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+  if (state.mode === "demo") return;
+  const j = sub.toJSON();
+  await run(sb.from("push_subscriptions").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }));
+}
+export async function disablePush() {
+  const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription();
+  if (!sub) return;
+  if (state.mode !== "demo") await run(sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint));
+  await sub.unsubscribe();
+}
+
 /* ================= Feedback ================= */
 const FB_KEY = "fcs-demo-feedback";
 const demoFb = () => { try { return JSON.parse(localStorage.getItem(FB_KEY)) || []; } catch (e) { return []; } };

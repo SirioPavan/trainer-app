@@ -1235,9 +1235,21 @@ function viewHilfe() {
      <textarea id="fbt" rows="4" maxlength="2000" required placeholder="z. B. «Bei Turnieren wäre ein Feld für den Treffpunkt praktisch»"></textarea>
      <button class="btn">Vorschlag senden</button>
      <p class="small muted">Geht direkt an den Entwickler der App. Danke!</p></form>
+   ${state.owner ? `<section class="card pad stack" id="pushbox"><h3>Push-Nachricht bei neuen Vorschlägen</h3><p class="small muted" id="pushst">Prüfe …</p><div class="btnrow" id="pushbtns"></div></section>` : ""}
    ${state.owner ? `<div class="sec-head"><h2>Eingegangene Vorschläge</h2><span class="note">${state.fbOpen || 0} offen</span></div><div class="card list" id="fbl"><p class="empty">Lade …</p></div>` : ""}`;
   V.querySelector("#fbf").onsubmit = e => { e.preventDefault(); const t = V.querySelector("#fbt");
     act(async () => { await db.sendFeedback(t.value); t.value = ""; fbList = null; }, "Danke! Vorschlag gesendet"); };
+  const pb = V.querySelector("#pushbox");
+  if (pb) db.pushState().then(st => {
+    const txt = { on: "Aktiv auf diesem Gerät. Du bekommst bei jedem neuen Vorschlag eine Mitteilung.", off: "Auf diesem Gerät noch nicht aktiv.",
+      denied: "Mitteilungen sind für die App blockiert. Bitte in den Einstellungen des Handys erlauben.", unsupported: "Dieses Gerät unterstützt das hier nicht. Auf dem iPhone: App zuerst über «Teilen → Zum Home-Bildschirm» installieren und von dort öffnen." }[st];
+    pb.querySelector("#pushst").textContent = txt;
+    const bb = pb.querySelector("#pushbtns");
+    bb.innerHTML = st === "on" ? `<button class="btn ghost" data-poff>Ausschalten</button>` : st === "off" ? `<button class="btn" data-pon>Push aktivieren</button>` : "";
+    const on = bb.querySelector("[data-pon]"), off = bb.querySelector("[data-poff]");
+    if (on) on.onclick = () => act(() => db.enablePush(), "Push aktiviert");
+    if (off) off.onclick = () => act(() => db.disablePush(), "Push ausgeschaltet");
+  });
   const box = V.querySelector("#fbl");
   if (!box) return;
   const show = l => {
