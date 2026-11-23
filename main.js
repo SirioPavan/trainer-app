@@ -19,11 +19,10 @@ const mins = t => t.blocks.reduce((a, b) => a + b.min, 0);
 const ex = id => state.exercises.find(e => e.id === id);
 const activePlayers = () => state.players.filter(p => p.active !== false);
 const attCount = t => Object.entries(state.attendance[t.id] || {}).filter(([pid, v]) => v && activePlayers().some(p => p.id === pid)).length;
-const isAdmin = () => state.role === "admin";
-// J+S-Coach: sieht alle Mannschaften wie ein Trainer, darf zusätzlich Trainer/innen einladen und entfernen (Backup, falls jemand austritt).
-// Anwesenheit kann sie im Notfall erfassen (wie jede Trainerin). Planung bleibt bei den Admins.
+// J+S-Coach: unsichtbarer Super-Admin – in jeder Mannschaft Admin-Rechte, taucht aber in keiner Liste auf.
 const isCoach = () => state.role === "coach";
-const canInvite = () => isAdmin() || isCoach();
+const isAdmin = () => state.role === "admin" || isCoach();
+const canInvite = () => isAdmin();
 const ROLE_NAME = { admin: "Admin", coach: "J+S-Coach", trainer: "Trainer/in" };
 const crewPeople = () => state.people.filter(p => p.role !== "coach");   // Coach zählt nicht als Leiter/in
 
@@ -78,7 +77,7 @@ navEl.addEventListener("click", e => { const b = e.target.closest("button"); if 
 function render(keepScroll) {
   const y = window.scrollY;
   const nav = document.querySelector(".nav"), top = document.querySelector(".top");
-  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isAdmin() ? "Admin" : isCoach() ? "J+S-Coach" : "Trainer");
+  document.getElementById("modeBadge").textContent = state.mode === "demo" ? "Demo" : !state.user || !state.role ? "" : (isCoach() ? "J+S-Coach" : isAdmin() ? "Admin" : "Trainer");
   document.getElementById("who").textContent = state.mode === "demo" ? "nur dieses Gerät" : (state.memberName || state.user?.email || "");
   const tn = document.getElementById("teamName");
   if (state.teams?.length > 1 && state.user) {
@@ -90,12 +89,14 @@ function render(keepScroll) {
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
   nav.hidden = false; top.classList.remove("bare");
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
-  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen" };
+  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen", hilfe: "Hilfe" };
   document.getElementById("title").textContent = route.training ? (route.training.startsWith("tpl:") ? "Vorlage" : "Training") : route.exercise ? "Übung" : T[route.tab];
   document.body.dataset.view = route.training ? "training" : route.exercise ? "exercise" : route.tab;   // für das PC-Layout
   if (route.training) viewTraining(route.training);
   else if (route.exercise) viewExercise(route.exercise);
-  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen })[route.tab]();
+  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen, hilfe: viewHilfe })[route.tab]();
+  const hb = document.getElementById("helpBtn");
+  if (hb) { hb.hidden = false; hb.dataset.n = state.owner && state.fbOpen ? state.fbOpen : ""; hb.setAttribute("aria-label", "Hilfe und Feedback" + (hb.dataset.n ? ` (${hb.dataset.n} neue Vorschläge)` : "")); }
   if (keepScroll) window.scrollTo({ top: y });
 }
 
@@ -184,7 +185,7 @@ function viewDashboard() {
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
    ${past.length ? `<details class="card pad" ${pastOpen ? "open" : ""} data-pastbox><summary class="lbl">Vergangene Trainings (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(rowT).join("")}</div></details>` : ""}
-   ${isAdmin() ? planBox(td) : isCoach() ? `<p class="small muted card pad">Als J+S-Coach siehst du alle Trainings dieser Mannschaft. Die Anwesenheit erfassen die Trainer/innen; du kannst sie im Notfall nachtragen. Trainer/innen lädst du unter «Kader» ein.</p>` : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
+   ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
   V.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
@@ -884,6 +885,7 @@ function viewKader() {
    <p class="small muted">Tipp zum Datenschutz: Vorname und Initial reichen, zum Beispiel «Luca M.».</p>
    ${inactive.length ? `<details class="card pad"><summary class="lbl">Ausgetragene Kinder (${inactive.length})</summary><div class="list">${inactive.map(p => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(p.name)}</b></span><button class="linkbtn" data-on="${p.id}">Wieder aufnehmen</button></div>`).join("")}</div></details>` : ""}
    ${isAdmin() ? importBox() + ndsBox() : ""}
+   ${isCoach() ? `<details class="card pad" id="clubov"><summary class="lbl">Vereinsübersicht: wer hat wo Zugang?</summary><div id="clubovb" class="stack" style="margin-top:10px"><p class="small muted">Lade …</p></div></details>` : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${ROLE_NAME[p.role] || "Trainer/in"}</span>
@@ -892,8 +894,8 @@ function viewKader() {
           return `<span class="days" aria-label="Einsatztage">Einsatz: ${D.map(d => `<button class="day" ${can ? "" : "disabled"} data-pday="${i}" data-d="${d}" aria-pressed="${(p.default_days || []).includes(d)}">${dn[d]}</button>`).join("")}</span>`; })()}
         ${ndsEd === i ? `<form class="inline" data-ndsf="${i}" style="margin-top:6px"><input name="nr" inputmode="numeric" value="${esc(p.nds_id || "")}" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer"><button class="btn">Speichern</button></form>` : ""}</span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
-      ${canInvite() && p.pending && (isAdmin() || p.role === "trainer") ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
-      ${(isAdmin() || (isCoach() && p.role === "trainer")) && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
+      ${canInvite() && p.pending ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
+      ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
       ${shareFor === p.email ? shareBox(p) : ""}`).join("")}</div>
    <section class="card pad stack planf">
      <h3>Einsatz und Abwesenheiten</h3>
@@ -914,6 +916,13 @@ function viewKader() {
       <form class="inline" id="mypw" style="margin-top:10px"><input id="mypw1" type="password" minlength="8" required placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" aria-label="Neues Passwort"><button class="btn">Speichern</button></form></details>
       <button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
+  const ov = V.querySelector("#clubov");
+  if (ov) ov.ontoggle = async () => { if (!ov.open || ov.dataset.done) return; ov.dataset.done = 1; const box = V.querySelector("#clubovb");
+    try { const rows = await db.clubOverview(), by = {};
+      rows.forEach(r => (by[r.team_name] ||= []).push(r));
+      box.innerHTML = Object.keys(by).length ? Object.entries(by).map(([t, l]) => `<div><span class="lbl">${esc(t)} · ${l.length}</span><div class="list">${l.map(r => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(r.display_name || r.email)}</b><span>${esc(r.email)} · ${ROLE_NAME[r.role] || "Trainer/in"}</span></span><span class="pill ${r.pending ? "wait" : "ok"}">${r.pending ? "eingeladen" : "aktiv"}</span></div>`).join("")}</div></div>`).join("")
+        + `<p class="small muted">Einladen oder entfernen: oben die Mannschaft wählen, dann hier unter «Trainerteam».</p>` : `<p class="small muted">Noch niemand eingetragen.</p>`;
+    } catch (e) { box.innerHTML = `<p class="small muted">Übersicht konnte nicht geladen werden.</p>`; } };
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
   V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
   V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
@@ -1175,6 +1184,53 @@ function merkpunkte() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg>
     <b>${t}</b><span>${d}</span></div>`).join("")}</div>`;
 }
+/* ================= Hilfe & Feedback ================= */
+const HELP = [
+  ["Erste Schritte", ["<b>Installieren:</b> Link im Browser öffnen und «Zum Home-Bildschirm» wählen (iPhone: Teilen-Menü · Android/PC: «App installieren»).",
+    "<b>Anmelden:</b> Du brauchst eine Einladung. Beim ersten Mal «Erstes Mal hier?» antippen und mit genau der eingeladenen E-Mail ein eigenes Passwort setzen.",
+    "<b>Mannschaft wechseln:</b> Wer in mehreren Mannschaften ist, wählt sie oben neben dem Vereinsnamen."]],
+  ["Planung und Training", ["<b>Startseite:</b> zeigt die nächste Einheit (Training oder Turnier), Kennzahlen und kommende Termine.",
+    "<b>Training öffnen:</b> Ablauf nach den J+S-Phasen, jede Übung mit Skizze. «Als PDF» erstellt das Blatt für den Platz (max. 2 Seiten).",
+    "<b>Vergangene Trainings:</b> unten auf der Planungsseite, zum Nachtragen der Anwesenheit.",
+    "admin:<b>Planen:</b> Trainings anlegen, Übungen tauschen und Serien erzeugen dürfen nur Admins."]],
+  ["Anwesenheit", ["Im Training oder Turnier die Kinder antippen, die da sind. Darunter auch die Leiter/innen abhaken – das braucht der NDS-Export.",
+    "<b>Trainer-Einsatz:</b> Wer an einem Termin nicht kann, trägt das im Training ein oder unter «Kader» für einen ganzen Zeitraum."]],
+  ["Übungen", ["Bibliothek mit Filtern nach Phase, Ort und Stichwort. Jede Übung zeigt Ablauf, Coaching und Skizze.",
+    "admin:<b>Generator und eigene Übungen:</b> nur für Admins, unter «Übungen» → «Generator»."]],
+  ["Kader und Trainerteam", ["Kinder erfassen, austragen oder wieder aufnehmen. Datenschutz: Vorname und Initial reichen.",
+    "admin:<b>Trainer/innen einladen:</b> E-Mail eintragen, Rolle wählen, «Einladen» und dann die Einladungsnachricht per WhatsApp oder E-Mail schicken.",
+    "admin:<b>NDS-Export:</b> zuerst «Aktivitäten», dann «Anwesenheiten» herunterladen und in dieser Reihenfolge in der NDS importieren, beide ab Kursbeginn."]],
+  ["Turniere", ["Liste mit Status (eingeteilt, angemeldet, Warteliste, abgesagt), Anwesenheit der Kinder und Einsatz der Trainer/innen."]],
+  ["Probleme", ["<b>Neue Version fehlt:</b> App ganz schliessen und neu öffnen.",
+    "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
+    "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
+];
+let fbList = null;
+function viewHilfe() {
+  const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
+  V.innerHTML = `
+   <div class="sec-head"><h2>Hilfe</h2><span class="note">So funktioniert die App</span></div>
+   <div class="stack">${HELP.map(([h, l], i) => `<details class="card pad helpsec" ${i === 0 ? "open" : ""}><summary class="lbl">${h}</summary><ul class="helplist">${items(l)}</ul></details>`).join("")}</div>
+   <div class="sec-head"><h2>Feedback</h2><span class="note">Ideen und Fehler melden</span></div>
+   <form class="card pad stack" id="fbf">
+     <label class="lbl" for="fbt">Was können wir verbessern?</label>
+     <textarea id="fbt" rows="4" maxlength="2000" required placeholder="z. B. «Bei Turnieren wäre ein Feld für den Treffpunkt praktisch»"></textarea>
+     <button class="btn">Vorschlag senden</button>
+     <p class="small muted">Geht direkt an den Entwickler der App. Danke!</p></form>
+   ${state.owner ? `<div class="sec-head"><h2>Eingegangene Vorschläge</h2><span class="note">${state.fbOpen || 0} offen</span></div><div class="card list" id="fbl"><p class="empty">Lade …</p></div>` : ""}`;
+  V.querySelector("#fbf").onsubmit = e => { e.preventDefault(); const t = V.querySelector("#fbt");
+    act(async () => { await db.sendFeedback(t.value); t.value = ""; fbList = null; }, "Danke! Vorschlag gesendet"); };
+  const box = V.querySelector("#fbl");
+  if (!box) return;
+  const show = l => {
+    box.innerHTML = l.length ? l.map(f => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="mid"><b style="white-space:pre-wrap;font-weight:600${f.done ? ";opacity:.55" : ""}">${esc(f.body)}</b><span>${esc(f.author || "Unbekannt")} · ${esc(f.team_id || "")} · ${new Date(f.created_at).toLocaleDateString("de-CH")}</span></span>
+      <button class="linkbtn" data-fbd="${esc(f.id)}" data-v="${f.done ? 0 : 1}">${f.done ? "Wieder öffnen" : "Erledigt"}</button></div>`).join("") : `<p class="empty">Noch keine Vorschläge.</p>`;
+    box.querySelectorAll("[data-fbd]").forEach(b => b.onclick = () => act(async () => { await db.setFeedbackDone(b.dataset.fbd, b.dataset.v === "1"); fbList = null; }, b.dataset.v === "1" ? "Als erledigt markiert" : "Wieder offen"));
+  };
+  if (fbList) show(fbList); else db.listFeedback().then(l => { fbList = l; show(l); }).catch(() => { box.innerHTML = `<p class="empty">Vorschläge konnten nicht geladen werden.</p>`; });
+}
+
 function viewWissen() {
   const bar = p => `<div class="bar">${p.map(([c, f, m, l]) => `<div style="flex:${f};background:${c}"><b>${m}</b>${l}</div>`).join("")}</div>`;
   const R = "var(--red)", K = "#141414", G = "#7a7a7a", L = "#5a5a5a";
@@ -1219,6 +1275,8 @@ function applyTheme(t) {
   const b = document.getElementById("themeBtn");
   if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">${THEMES_UI[t][1]}</svg>`; b.title = "Darstellung: " + THEMES_UI[t][0]; b.setAttribute("aria-label", b.title + " – tippen zum Wechseln"); }
 }
+const helpBtn = document.getElementById("helpBtn");
+if (helpBtn) helpBtn.onclick = () => go({ tab: "hilfe" });
 const themeBtn = document.getElementById("themeBtn");
 if (themeBtn) themeBtn.onclick = () => {
   const order = ["auto", "light", "dark"], next = order[(order.indexOf(getTheme()) + 1) % 3];

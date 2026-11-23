@@ -158,6 +158,38 @@ async function load() {
     state.people = data || [];
     await loadDocs();
   }
+  // Feedback: Besitzer der App sieht offene Vorschläge (Tabelle ab 26)
+  { const o = await sb.rpc("am_app_owner"); state.owner = !o.error && o.data === true;
+    if (state.owner) { const f = await sb.from("feedback").select("id", { count: "exact", head: true }).eq("done", false); state.fbOpen = f.count || 0; } }
+}
+
+/* ================= J+S-Coach: Vereinsübersicht ================= */
+export async function clubOverview() {
+  if (state.mode === "demo") return [
+    { team_id: "e-junioren", team_name: "E-Junioren", display_name: "Du (Demo)", email: "du@verein.ch", role: "admin", pending: false },
+    { team_id: "e-junioren", team_name: "E-Junioren", display_name: "Assistenz (Demo)", email: "assistenz@verein.ch", role: "trainer", pending: false },
+    { team_id: "g-junioren", team_name: "G-Junioren", display_name: "Trainerin G (Demo)", email: "g@verein.ch", role: "admin", pending: true }];
+  const { data, error } = await sb.rpc("club_overview"); if (error) throw error; return data || [];
+}
+
+/* ================= Feedback ================= */
+const FB_KEY = "fcs-demo-feedback";
+const demoFb = () => { try { return JSON.parse(localStorage.getItem(FB_KEY)) || []; } catch (e) { return []; } };
+export async function sendFeedback(body) {
+  body = String(body || "").trim().slice(0, 2000); if (!body) throw new Error("Bitte einen Vorschlag eingeben");
+  if (state.mode === "demo") { const l = demoFb(); l.unshift({ id: "d" + Date.now(), author: "Demo", team_id: TEAM, body, done: false, created_at: new Date().toISOString() });
+    try { localStorage.setItem(FB_KEY, JSON.stringify(l)); } catch (e) {} state.fbOpen = l.filter(x => !x.done).length; return; }
+  await run(sb.from("feedback").insert({ team_id: TEAM, author: state.memberName || state.user?.email || null, body }));
+  if (state.owner) state.fbOpen = (state.fbOpen || 0) + 1;
+}
+export async function listFeedback() {
+  if (state.mode === "demo") return demoFb();
+  const { data, error } = await sb.from("feedback").select("*").order("done").order("created_at", { ascending: false }); if (error) throw error; return data || [];
+}
+export async function setFeedbackDone(id, done) {
+  if (state.mode === "demo") { const l = demoFb(); const x = l.find(f => f.id === id); if (x) x.done = done; try { localStorage.setItem(FB_KEY, JSON.stringify(l)); } catch (e) {} state.fbOpen = l.filter(f => !f.done).length; return; }
+  await run(sb.from("feedback").update({ done }).eq("id", id));
+  state.fbOpen = Math.max(0, (state.fbOpen || 0) + (done ? -1 : 1));
 }
 async function loadDocs() {
   const { data, error } = await sb.from("documents").select("*").eq("team_id", TEAM).order("category").order("title");
@@ -263,7 +295,7 @@ function loadDemo() {
   if (state.forced && team.level === "E" && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
-  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.avail = d.avail || {}; state.team.minTrainers = d.minTrainers ?? 2; state.role = "admin"; state.links = d.links || [];
+  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.avail = d.avail || {}; state.team.minTrainers = d.minTrainers ?? 2; state.role = "admin"; state.links = d.links || []; state.owner = true; state.fbOpen = demoFb().filter(x => !x.done).length;
   demoOwn = d.ownEx || []; demoOwn.forEach(r => state.exercises.push(normEx(r)));
   state.user = { email: "demo", id: "demo-u1" };
 }
