@@ -66,11 +66,22 @@ const NAV = [
   ["turniere", "Turniere", '<path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 20h8"/>'],
   ["wissen", "Wissen", '<path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h9"/>']
 ];
-let route = { tab: "trainings" };
+// J+S-Coach: schlanke App – Cockpit, Anwesenheit, Kader (keine Planung, Übungen, Turniere, Wissen)
+const NAV_COACH = [
+  ["cockpit", "Cockpit", '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'],
+  ["anwesenheit", "Anwesenheit", '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 12l2.5 2.5 4.5-5"/>'],
+  NAV.find(n => n[0] === "kader")];
+const COACH_TABS = ["cockpit", "anwesenheit", "kader", "hilfe"];
+const homeTab = () => isCoach() ? "cockpit" : "trainings";
+let route = { tab: "trainings" }, navFor = null;
 function go(r) { route = r; history.pushState(r, ""); render(); window.scrollTo({ top: 0 }); }
 window.addEventListener("popstate", e => { route = e.state || { tab: "trainings" }; render(); });
 const navEl = document.getElementById("nav");
-navEl.innerHTML = NAV.map(([k, l, p]) => `<button data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>${l}</button>`).join("");
+function buildNav() {
+  const k = isCoach() ? "coach" : "all"; if (navFor === k) return; navFor = k;
+  navEl.innerHTML = (isCoach() ? NAV_COACH : NAV).map(([k, l, p]) => `<button data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>${l}</button>`).join("");
+}
+buildNav();
 navEl.addEventListener("click", e => { const b = e.target.closest("button"); if (b) go({ tab: b.dataset.tab }); });
 
 /* ================= Rahmen ================= */
@@ -82,19 +93,21 @@ function render(keepScroll) {
   const tn = document.getElementById("teamName");
   if (state.teams?.length > 1 && state.user) {
     tn.innerHTML = `<select class="teamsel" aria-label="Mannschaft wechseln">${state.teams.map(t => `<option value="${t.id}" ${t.id === state.team.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`;
-    tn.firstChild.onchange = e => { route = { tab: "trainings" }; history.replaceState(route, ""); db.switchTeam(e.target.value); };
+    tn.firstChild.onchange = e => { route = { tab: isCoach() ? (COACH_TABS.includes(route.tab) && route.tab !== "hilfe" ? route.tab : "anwesenheit") : "trainings" }; history.replaceState(route, ""); db.switchTeam(e.target.value); };
   } else tn.textContent = state.team.name;
   if (!state.user) { nav.hidden = true; top.classList.add("bare"); viewLogin(); return; }
   if (state.recovery) { nav.hidden = true; viewSetPassword(); return; }
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
   nav.hidden = false; top.classList.remove("bare");
+  buildNav();
+  if (isCoach() && (route.training || route.exercise || !COACH_TABS.includes(route.tab))) route = { tab: "cockpit" };
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
-  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen", hilfe: "Hilfe", cockpit: "Cockpit" };
+  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen", hilfe: "Hilfe", cockpit: "Cockpit", anwesenheit: "Anwesenheit" };
   document.getElementById("title").textContent = route.training ? (route.training.startsWith("tpl:") ? "Vorlage" : "Training") : route.exercise ? "Übung" : T[route.tab];
   document.body.dataset.view = route.training ? "training" : route.exercise ? "exercise" : route.tab;   // für das PC-Layout
   if (route.training) viewTraining(route.training);
   else if (route.exercise) viewExercise(route.exercise);
-  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen, hilfe: viewHilfe, cockpit: viewCockpit })[route.tab]();
+  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen, hilfe: viewHilfe, cockpit: viewCockpit, anwesenheit: viewAnwesenheit })[route.tab]();
   const hb = document.getElementById("helpBtn");
   if (hb) { hb.hidden = false; hb.dataset.n = state.owner && state.fbOpen ? state.fbOpen : ""; hb.setAttribute("aria-label", "Hilfe und Feedback" + (hb.dataset.n ? ` (${hb.dataset.n} neue Vorschläge)` : "")); }
   if (keepScroll) window.scrollTo({ top: y });
@@ -185,7 +198,6 @@ function viewDashboard() {
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
    ${past.length ? `<details class="card pad" ${pastOpen ? "open" : ""} data-pastbox><summary class="lbl">Vergangene Trainings (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(rowT).join("")}</div></details>` : ""}
-   ${isCoach() ? `<button class="card pad cockpitlink" data-cockpit><b>Super-Admin-Cockpit</b><span class="small muted">Alle Mannschaften, Zugänge und Einladungen auf einen Blick</span></button>` : ""}
    ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
@@ -887,7 +899,6 @@ function viewKader() {
    <p class="small muted">Tipp zum Datenschutz: Vorname und Initial reichen, zum Beispiel «Luca M.».</p>
    ${inactive.length ? `<details class="card pad"><summary class="lbl">Ausgetragene Kinder (${inactive.length})</summary><div class="list">${inactive.map(p => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(p.name)}</b></span><button class="linkbtn" data-on="${p.id}">Wieder aufnehmen</button></div>`).join("")}</div></details>` : ""}
    ${isAdmin() ? importBox() + ndsBox() : ""}
-   ${isCoach() ? `<button class="card pad cockpitlink" data-cockpit><b>Super-Admin-Cockpit</b><span class="small muted">Alle Mannschaften, Zugänge und Einladungen auf einen Blick</span></button>` : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${ROLE_NAME[p.role] || "Trainer/in"}</span>
@@ -1204,9 +1215,16 @@ const HELP = [
 let fbList = null;
 function viewHilfe() {
   const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
+  const COACH_HELP = [["Super-Admin-Cockpit", ["Zeigt alle Mannschaften mit Kindern, Trainer/innen, letzter Anwesenheit und Hinweisen (z. B. kein Admin, Anwesenheit lückenhaft).",
+      "<b>Einladen:</b> Mannschaft und Rolle wählen, E-Mail und Name eintragen, «Freischalten» und dann per WhatsApp senden.",
+      "<b>Entfernen:</b> Mannschaft aufklappen, bei der Person «Entfernen» und nochmals bestätigen.",
+      "Du bist in den Mannschaften für niemanden sichtbar."]],
+    ["Anwesenheit", ["Oben die Mannschaft wählen. Termine ohne Anwesenheit sind mit «fehlt» markiert. Antippen, um sie im Notfall nachzutragen."]],
+    ["Kader und NDS", ["Kinder erfassen, austragen oder wieder aufnehmen.", "<b>NDS-Export:</b> zuerst «Aktivitäten», dann «Anwesenheiten» herunterladen und in dieser Reihenfolge in der NDS importieren, beide ab Kursbeginn."]]];
+  const SECS = isCoach() ? [...COACH_HELP, HELP.find(h => h[0] === "Erste Schritte"), HELP.find(h => h[0] === "Probleme")] : HELP;
   V.innerHTML = `
    <div class="sec-head"><h2>Hilfe</h2><span class="note">So funktioniert die App</span></div>
-   <div class="stack">${HELP.map(([h, l], i) => `<details class="card pad helpsec" ${i === 0 ? "open" : ""}><summary class="lbl">${h}</summary><ul class="helplist">${items(l)}</ul></details>`).join("")}</div>
+   <div class="stack">${SECS.map(([h, l], i) => `<details class="card pad helpsec" ${i === 0 ? "open" : ""}><summary class="lbl">${h}</summary><ul class="helplist">${items(l)}</ul></details>`).join("")}</div>
    <div class="sec-head"><h2>Feedback</h2><span class="note">Ideen und Fehler melden</span></div>
    <form class="card pad stack" id="fbf">
      <label class="lbl" for="fbt">Was können wir verbessern?</label>
@@ -1231,7 +1249,7 @@ function viewHilfe() {
 let ck = null, ckOpen = null, ckShare = null, ckRm = null;
 async function loadCockpit() { const [stats, people] = await Promise.all([db.clubStats(), db.clubOverview()]); ck = { stats, people }; }
 function viewCockpit() {
-  if (!isCoach() && state.mode !== "demo") { go({ tab: "trainings" }); return; }
+  if (!isCoach()) { go({ tab: "trainings" }); return; }
   if (!ck) { V.innerHTML = `<p class="empty">Lade Cockpit …</p>`; loadCockpit().then(() => render(true)).catch(e => { V.innerHTML = `<p class="empty">Cockpit konnte nicht geladen werden: ${esc(e.message || e)}</p>`; }); return; }
   const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "numeric" }) : "–";
   const teams = ck.stats.map(t => { const ppl = ck.people.filter(p => p.team_id === t.team_id);
@@ -1262,7 +1280,7 @@ function viewCockpit() {
            ${p.pending ? `<button class="linkbtn" data-ckwa="${esc(t.team_id)}|${i}">Per WhatsApp</button>` : ""}
            <button class="linkbtn" data-ckrm="${esc(t.team_id)}|${i}">${ckRm === t.team_id + "|" + i ? "Wirklich entfernen?" : "Entfernen"}</button></span></div>`).join("")
          : `<p class="empty">Noch niemand eingetragen.</p>`}
-       <div class="btnrow" style="padding:10px 14px"><button class="btn ghost" data-ckgo="${esc(t.team_id)}">Zur Mannschaft wechseln</button></div></div>` : ""}
+       <div class="btnrow" style="padding:10px 14px"><button class="btn ghost" data-ckgo="${esc(t.team_id)}">Anwesenheit dieser Mannschaft</button></div></div>` : ""}
    </section>`).join("")}
    <button class="btn ghost" data-ckreload>Aktualisieren</button>`;
   const find = v => { const [tid, i] = v.split("|"); const t = teams.find(x => x.team_id === tid); return { t, p: t.ppl[+i] }; };
@@ -1272,12 +1290,35 @@ function viewCockpit() {
     if (ckRm !== b.dataset.ckrm) { ckRm = b.dataset.ckrm; render(true); return; }
     const { t, p } = find(b.dataset.ckrm); ckRm = null;
     act(async () => { await db.removeFromTeam(t.team_id, p); await loadCockpit(); if (t.team_id === state.team.id) await db.switchTeam(t.team_id); }, `${p.display_name || p.email} entfernt`); });
-  V.querySelectorAll("[data-ckgo]").forEach(b => b.onclick = () => { route = { tab: "trainings" }; history.replaceState(route, ""); db.switchTeam(b.dataset.ckgo); });
+  V.querySelectorAll("[data-ckgo]").forEach(b => b.onclick = () => { route = { tab: "anwesenheit" }; history.replaceState(route, ""); db.switchTeam(b.dataset.ckgo); });
   V.querySelector("[data-ckreload]").onclick = () => { ck = null; ckShare = null; render(); };
   const f = V.querySelector("#ckinv");
   f.onsubmit = e => { e.preventDefault(); const t = teams.find(x => x.team_id === f.team.value), email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(), role = f.role.value;
     act(async () => { await db.inviteToTeam(t.team_id, email, name, role); ckShare = { email, display_name: name, role, team_name: t.team_name }; await loadCockpit().catch(() => {}); }, "Freigeschaltet – jetzt per WhatsApp senden"); };
   V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const ta = V.querySelector("#invtext"); navigator.clipboard?.writeText(ta.value).then(() => toast("Text kopiert"), () => { ta.select(); toast("Text markiert – jetzt kopieren"); }); });
+}
+
+/* ================= Anwesenheit (Ansicht J+S-Coach) ================= */
+let anwSel = null;
+function viewAnwesenheit() {
+  const td = db.today(), from = new Date(Date.now() - 60 * 864e5).toLocaleDateString("sv-SE"), to = new Date(Date.now() + 14 * 864e5).toLocaleDateString("sv-SE");
+  const ev = [...state.trainings.filter(t => t.status !== "abgesagt").map(t => ({ id: t.id, date: t.date, kind: "Training", label: `${PLACE[t.place] || ""} · ${t.start}–${t.end}` })),
+              ...state.tournaments.filter(u => u.status !== "abgesagt").map(u => ({ id: u.id, date: u.date, kind: "Turnier", label: u.name }))]
+    .filter(e => e.date >= from && e.date <= to).sort((a, b) => b.date.localeCompare(a.date));
+  if (anwSel && !ev.some(e => e.id === anwSel)) anwSel = null;
+  const n = activePlayers().length;
+  const row = e => { const c = attCount({ id: e.id }), fut = e.date > td, d = dparts(e.date);
+    return `<button class="row" data-anw="${e.id}" aria-expanded="${anwSel === e.id}" style="grid-template-columns:minmax(0,1fr) auto">
+      <span class="mid"><b>${d.full}</b><span>${e.kind} · ${esc(e.label)}</span></span>
+      <span class="pill ${c ? "ok" : fut ? "open" : "wait"}">${c ? `${c}/${n} da` : fut ? "geplant" : "fehlt"}</span></button>
+      ${anwSel === e.id ? attSection(e.id) : ""}`; };
+  const missing = ev.filter(e => e.date <= td && !attCount({ id: e.id })).length;
+  V.innerHTML = `
+   <div class="sec-head"><h2>Anwesenheit</h2><span class="note">${esc(state.team.name)} · letzte 60 Tage</span></div>
+   <p class="small muted card pad">Die Anwesenheit erfassen die Trainer/innen. Hier kannst du sie kontrollieren und im Notfall nachtragen.${missing ? ` <b>${missing} vergangene Termine ohne Anwesenheit.</b>` : ""}</p>
+   <div class="card list">${ev.length ? ev.map(row).join("") : `<p class="empty">Keine Trainings oder Turniere in diesem Zeitraum.</p>`}</div>`;
+  V.querySelectorAll("[data-anw]").forEach(b => b.onclick = () => { anwSel = anwSel === b.dataset.anw ? null : b.dataset.anw; if (anwSel) attOpen[anwSel] = true; render(true); });
+  bindAtt();
 }
 
 function viewWissen() {
