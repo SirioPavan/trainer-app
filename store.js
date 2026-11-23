@@ -6,7 +6,8 @@ import { CONFIG } from "./config.js";
 import { generateSeries, themesFor } from "./plan.js";
 
 let TEAM = CONFIG.teamId || "e-junioren";   // aktuelle Mannschaft – wird nach dem Login aus den Mitgliedschaften gewählt
-const TEAM_KEY = "fcs-trainer-team";
+const TEAM_KEY = "fcs-trainer-team", TEAM_NAME_KEY = "fcs-trainer-team-name";
+const lastTeamName = () => { try { return localStorage.getItem(TEAM_NAME_KEY) || ""; } catch (e) { return ""; } };
 const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD lokal
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
 const normEx = e => Object.assign({}, e.data, { id: e.id, place: e.place, ph: e.phase, name: e.name, page: e.page, levels: e.levels || null, team_id: e.team_id || null, also_teams: e.also_teams || null });
@@ -17,7 +18,7 @@ const forLevel = (x, lv, lvs = [lv]) => x.team_id === TEAM || (x.also_teams || [
 
 /* Gemeinsamer Zustand, den die Oberfläche liest */
 export const state = {
-  mode: "demo", user: null, role: "admin", team: { id: TEAM, name: "E-Junioren", level: "E" }, teams: [],
+  mode: "demo", user: null, role: "admin", team: { id: TEAM, name: lastTeamName(), level: "E" }, teams: [],
   exercises: [], templates: [], trainings: [], tournaments: [], players: [], attendance: {}, leaders: {}, avail: {}, people: [], documents: [], docUrls: {}, links: []
 };
 
@@ -129,6 +130,7 @@ async function load() {
   state.role = mine ? mine.role : null;
   state.memberName = mine?.display_name || "";
   state.team = mine ? { id: mine.id, name: mine.name, level: mine.level, levels: mine.levels, minTrainers: mine.minTrainers } : { id: TEAM, name: "", level: "E", levels: ["E"], minTrainers: 2 };
+  try { if (mine) localStorage.setItem(TEAM_NAME_KEY, mine.name); } catch (e) {}
   state.exercises = (ex.data || []).filter(e => SAFE_ID.test(e.id)).map(normEx).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.templates = (tp.data || []).filter(t => SAFE_ID.test(t.id)).map(t => ({ ...t, blocks: cleanBlocks(t.blocks), start: t.start_time.slice(0, 5), end: t.end_time.slice(0, 5) })).filter(x => forLevel(x, state.team.level, state.team.levels));
   state.trainings = (tr.data || []).map(normT);
