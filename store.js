@@ -242,6 +242,11 @@ export async function listFeedback() {
   if (state.mode === "demo") return demoFb();
   const { data, error } = await sb.from("feedback").select("*").order("done").order("created_at", { ascending: false }); if (error) throw error; return data || [];
 }
+export async function deleteFeedback(id) {   // bleibt im Hintergrund im Archiv (feedback_archive)
+  if (state.mode === "demo") { const l = demoFb().filter(f => f.id !== id); try { localStorage.setItem(FB_KEY, JSON.stringify(l)); } catch (e) {} state.fbOpen = l.filter(f => !f.done).length; return; }
+  const { data, error } = await sb.from("feedback").delete().eq("id", id).select("done"); if (error) throw error;
+  if (data?.[0] && !data[0].done) state.fbOpen = Math.max(0, (state.fbOpen || 0) - 1);
+}
 export async function setFeedbackDone(id, done) {
   if (state.mode === "demo") { const l = demoFb(); const x = l.find(f => f.id === id); if (x) x.done = done; try { localStorage.setItem(FB_KEY, JSON.stringify(l)); } catch (e) {} state.fbOpen = l.filter(f => !f.done).length; return; }
   await run(sb.from("feedback").update({ done }).eq("id", id));

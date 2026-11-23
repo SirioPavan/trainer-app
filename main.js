@@ -1216,7 +1216,7 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
-let fbList = null;
+let fbList = null, fbDel = null;
 function viewHilfe() {
   const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
   const COACH_HELP = [["Super-Admin-Cockpit", ["Zeigt alle Mannschaften mit Kindern, Trainer/innen, letzter Anwesenheit und Hinweisen (z. B. kein Admin, Anwesenheit lückenhaft).",
@@ -1255,7 +1255,10 @@ function viewHilfe() {
   const show = l => {
     box.innerHTML = l.length ? l.map(f => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b style="white-space:pre-wrap;font-weight:600${f.done ? ";opacity:.55" : ""}">${esc(f.body)}</b><span>${esc(f.author || "Unbekannt")} · ${esc(f.team_id || "")} · ${new Date(f.created_at).toLocaleDateString("de-CH")}</span></span>
-      <button class="linkbtn" data-fbd="${esc(f.id)}" data-v="${f.done ? 0 : 1}">${f.done ? "Wieder öffnen" : "Erledigt"}</button></div>`).join("") : `<p class="empty">Noch keine Vorschläge.</p>`;
+      <span class="stackr"><button class="linkbtn" data-fbd="${esc(f.id)}" data-v="${f.done ? 0 : 1}">${f.done ? "Wieder öffnen" : "Erledigt"}</button>
+      <button class="linkbtn" data-fbx="${esc(f.id)}">${fbDel === f.id ? "Wirklich löschen?" : "Löschen"}</button></span></div>`).join("") : `<p class="empty">Noch keine Vorschläge.</p>`;
+    box.querySelectorAll("[data-fbx]").forEach(b => b.onclick = () => { if (fbDel !== b.dataset.fbx) { fbDel = b.dataset.fbx; show(fbList || l); return; }
+      fbDel = null; act(async () => { await db.deleteFeedback(b.dataset.fbx); fbList = null; }, "Gelöscht"); });
     box.querySelectorAll("[data-fbd]").forEach(b => b.onclick = () => act(async () => { await db.setFeedbackDone(b.dataset.fbd, b.dataset.v === "1"); fbList = null; }, b.dataset.v === "1" ? "Als erledigt markiert" : "Wieder offen"));
   };
   if (fbList) show(fbList); else db.listFeedback().then(l => { fbList = l; show(l); }).catch(() => { box.innerHTML = `<p class="empty">Vorschläge konnten nicht geladen werden.</p>`; });
