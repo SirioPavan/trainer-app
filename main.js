@@ -20,7 +20,7 @@ const ex = id => state.exercises.find(e => e.id === id);
 const activePlayers = () => state.players.filter(p => p.active !== false);
 const attCount = t => Object.entries(state.attendance[t.id] || {}).filter(([pid, v]) => v && activePlayers().some(p => p.id === pid)).length;
 const isAdmin = () => state.role === "admin";
-// J+S-Coach: sieht alle Mannschaften wie ein Trainer, darf zusätzlich Trainer/innen einladen.
+// J+S-Coach: sieht alle Mannschaften wie ein Trainer, darf zusätzlich Trainer/innen einladen und entfernen (Backup, falls jemand austritt).
 // Anwesenheit kann sie im Notfall erfassen (wie jede Trainerin). Planung bleibt bei den Admins.
 const isCoach = () => state.role === "coach";
 const canInvite = () => isAdmin() || isCoach();
@@ -893,7 +893,7 @@ function viewKader() {
         ${ndsEd === i ? `<form class="inline" data-ndsf="${i}" style="margin-top:6px"><input name="nr" inputmode="numeric" value="${esc(p.nds_id || "")}" placeholder="NDS-Personennummer" aria-label="NDS-Personennummer"><button class="btn">Speichern</button></form>` : ""}</span>
       <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
       ${canInvite() && p.pending && (isAdmin() || p.role === "trainer") ? `<button class="linkbtn" data-share="${i}">${shareFor === p.email ? "Schliessen" : "Einladung senden"}</button>` : ""}
-      ${isAdmin() && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
+      ${(isAdmin() || (isCoach() && p.role === "trainer")) && p.email !== state.user?.email ? `<button class="linkbtn" data-rm="${i}">Entfernen</button>` : ""}</span></div>
       ${shareFor === p.email ? shareBox(p) : ""}`).join("")}</div>
    <section class="card pad stack planf">
      <h3>Einsatz und Abwesenheiten</h3>
