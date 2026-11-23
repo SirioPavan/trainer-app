@@ -313,7 +313,7 @@ function loadDemo() {
   if (state.forced && team.level === "E" && !d.trainings.some(t => String(t.id).startsWith("hist-"))) addDemoHistory(d);
   state.trainings = d.trainings.map(t => ({ ...t, start: t.start_time, end: t.end_time, tpl: t.template_id }));
   state.tournaments = d.tournaments.map(normU);
-  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.avail = d.avail || {}; state.team.minTrainers = d.minTrainers ?? 2; state.role = "admin"; state.links = d.links || []; state.owner = true; state.fbOpen = demoFb().filter(x => !x.done).length;
+  state.players = d.players; state.attendance = d.attendance; state.people = d.people; state.leaders = d.leaders || {}; state.avail = d.avail || {}; state.team.minTrainers = d.minTrainers ?? 2; state.role = new URLSearchParams(location.search).has("coach") ? "coach" : "admin"; state.links = d.links || []; state.owner = true; state.fbOpen = demoFb().filter(x => !x.done).length;
   demoOwn = d.ownEx || []; demoOwn.forEach(r => state.exercises.push(normEx(r)));
   state.user = { email: "demo", id: "demo-u1" };
 }
