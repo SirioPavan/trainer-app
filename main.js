@@ -95,6 +95,7 @@ function render(keepScroll) {
     tn.innerHTML = `<select class="teamsel" aria-label="Mannschaft wechseln">${state.teams.map(t => `<option value="${t.id}" ${t.id === state.team.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>`;
     tn.firstChild.onchange = e => { route = { tab: isCoach() ? (COACH_TABS.includes(route.tab) && route.tab !== "hilfe" ? route.tab : "anwesenheit") : "trainings" }; history.replaceState(route, ""); db.switchTeam(e.target.value); };
   } else tn.textContent = state.team.name;
+  document.querySelector(".top .club")?.classList.toggle("multi", !!(state.teams?.length > 1 && state.user));
   if (!state.user) { nav.hidden = true; top.classList.add("bare"); viewLogin(); return; }
   if (state.recovery) { nav.hidden = true; viewSetPassword(); return; }
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
@@ -872,12 +873,13 @@ function viewKader() {
   const ap = activePlayers().slice().sort((a, b) => a.name.localeCompare(b.name, "de")), inactive = state.players.filter(p => p.active === false);
   const seg = `<div class="seg" role="tablist" aria-label="Ansicht">${[["kader", "Kader & Team"], ["stats", "Statistik"]].map(([k, l]) => `<button role="tab" data-km="${k}" aria-selected="${kaderMode === k}">${l}</button>`).join("")}</div>`;
   if (kaderMode === "stats") {
-    V.innerHTML = seg + viewStats();
+    V.innerHTML = (isCoach() ? teamPick() : "") + seg + viewStats();
     V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
+    bindTeamPick();
     V.querySelectorAll("[data-sr]").forEach(b => b.onclick = () => { statRange = b.dataset.sr; render(true); });
     return;
   }
-  V.innerHTML = seg + `
+  V.innerHTML = (isCoach() ? teamPick() : "") + seg + `
    <div class="sec-head"><h2>Kader ${esc(state.team.name)}</h2><span class="note">${ap.length} Kinder</span></div>
    <div class="card list">${ap.map(p => {
      const da = past.filter(t => state.attendance[t.id][p.id]).length;
@@ -929,6 +931,7 @@ function viewKader() {
       <form class="inline" id="mypw" style="margin-top:10px"><input id="mypw1" type="password" minlength="8" required placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" aria-label="Neues Passwort"><button class="btn">Speichern</button></form></details>
       <button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
+  bindTeamPick();
   V.querySelectorAll("[data-cockpit]").forEach(b => b.onclick = () => go({ tab: "cockpit" }));
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
   V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
@@ -1298,6 +1301,10 @@ function viewCockpit() {
   V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const ta = V.querySelector("#invtext"); navigator.clipboard?.writeText(ta.value).then(() => toast("Text kopiert"), () => { ta.select(); toast("Text markiert – jetzt kopieren"); }); });
 }
 
+/* ================= Mannschaft wählen (gut sichtbar, v. a. für den J+S-Coach) ================= */
+const teamPick = () => state.teams?.length > 1 && state.user ? `<div class="chips teampick" role="group" aria-label="Mannschaft wählen">${state.teams.map(t => `<button class="chip" data-tpick="${esc(t.id)}" aria-pressed="${t.id === state.team.id}">${esc(t.name)}</button>`).join("")}</div>` : "";
+function bindTeamPick() { V.querySelectorAll("[data-tpick]").forEach(b => b.onclick = () => { if (b.dataset.tpick !== state.team.id) db.switchTeam(b.dataset.tpick); }); }
+
 /* ================= Anwesenheit (Ansicht J+S-Coach) ================= */
 let anwSel = null;
 function viewAnwesenheit() {
@@ -1314,9 +1321,11 @@ function viewAnwesenheit() {
       ${anwSel === e.id ? attSection(e.id) : ""}`; };
   const missing = ev.filter(e => e.date <= td && !attCount({ id: e.id })).length;
   V.innerHTML = `
+   ${teamPick()}
    <div class="sec-head"><h2>Anwesenheit</h2><span class="note">${esc(state.team.name)} · letzte 60 Tage</span></div>
    <p class="small muted card pad">Die Anwesenheit erfassen die Trainer/innen. Hier kannst du sie kontrollieren und im Notfall nachtragen.${missing ? ` <b>${missing} vergangene Termine ohne Anwesenheit.</b>` : ""}</p>
    <div class="card list">${ev.length ? ev.map(row).join("") : `<p class="empty">Keine Trainings oder Turniere in diesem Zeitraum.</p>`}</div>`;
+  bindTeamPick();
   V.querySelectorAll("[data-anw]").forEach(b => b.onclick = () => { anwSel = anwSel === b.dataset.anw ? null : b.dataset.anw; if (anwSel) attOpen[anwSel] = true; render(true); });
   bindAtt();
 }
