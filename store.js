@@ -172,6 +172,24 @@ export async function clubOverview() {
   const { data, error } = await sb.rpc("club_overview"); if (error) throw error; return data || [];
 }
 
+export async function clubStats() {
+  if (state.mode === "demo") { const d = new Date(Date.now() + 2 * 864e5).toLocaleDateString("sv-SE"), l = new Date(Date.now() - 3 * 864e5).toLocaleDateString("sv-SE");
+    return DEMO_TEAMS.map((t, i) => ({ team_id: t.id, team_name: t.name, kids: [15, 12, 18, 11][i] ?? 10, next_training: d, last_attendance: i === 2 ? null : l, past30: 8, with_att30: [8, 6, 0, 7][i] ?? 5, tournaments_open: i })); }
+  const { data, error } = await sb.rpc("club_stats"); if (error) throw error; return data || [];
+}
+export async function inviteToTeam(teamId, email, displayName, role) {
+  email = String(email || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Bitte eine gültige E-Mail eingeben");
+  if (!["admin", "trainer"].includes(role)) throw new Error("Unbekannte Rolle");
+  if (state.mode === "demo") return;
+  await run(sb.from("invites").upsert({ team_id: teamId, email, display_name: displayName || null, role }));
+}
+export async function removeFromTeam(teamId, p) {
+  if (state.mode === "demo") return;
+  await run(sb.from("invites").delete().eq("team_id", teamId).eq("email", p.email));
+  if (p.user_id) await run(sb.from("team_members").delete().eq("team_id", teamId).eq("user_id", p.user_id));
+}
+
 /* ================= Feedback ================= */
 const FB_KEY = "fcs-demo-feedback";
 const demoFb = () => { try { return JSON.parse(localStorage.getItem(FB_KEY)) || []; } catch (e) { return []; } };

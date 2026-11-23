@@ -89,12 +89,12 @@ function render(keepScroll) {
   if (state.mode === "cloud" && !state.role) { nav.hidden = true; viewNoAccess(); return; }
   nav.hidden = false; top.classList.remove("bare");
   navEl.querySelectorAll("button").forEach(b => b.dataset.tab === route.tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
-  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen", hilfe: "Hilfe" };
+  const T = { trainings: "Planung", uebungen: "Übungen", kader: "Kader", turniere: "Turniere", wissen: "Wissen", hilfe: "Hilfe", cockpit: "Cockpit" };
   document.getElementById("title").textContent = route.training ? (route.training.startsWith("tpl:") ? "Vorlage" : "Training") : route.exercise ? "Übung" : T[route.tab];
   document.body.dataset.view = route.training ? "training" : route.exercise ? "exercise" : route.tab;   // für das PC-Layout
   if (route.training) viewTraining(route.training);
   else if (route.exercise) viewExercise(route.exercise);
-  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen, hilfe: viewHilfe })[route.tab]();
+  else ({ trainings: viewDashboard, uebungen: viewLibrary, kader: viewKader, turniere: viewTurniere, wissen: viewWissen, hilfe: viewHilfe, cockpit: viewCockpit })[route.tab]();
   const hb = document.getElementById("helpBtn");
   if (hb) { hb.hidden = false; hb.dataset.n = state.owner && state.fbOpen ? state.fbOpen : ""; hb.setAttribute("aria-label", "Hilfe und Feedback" + (hb.dataset.n ? ` (${hb.dataset.n} neue Vorschläge)` : "")); }
   if (keepScroll) window.scrollTo({ top: y });
@@ -185,6 +185,7 @@ function viewDashboard() {
    <div class="card list">${vis.map(it => it.k === "t" ? rowT(it.o) : rowU(it.o)).join("") || '<p class="empty">Nichts geplant.</p>'}</div>
    ${items.length > 12 ? `<button class="btn ghost" data-more>${showAll ? "Weniger anzeigen" : "Alle " + items.length + " Termine anzeigen"}</button>` : ""}
    ${past.length ? `<details class="card pad" ${pastOpen ? "open" : ""} data-pastbox><summary class="lbl">Vergangene Trainings (${past.length}) · Anwesenheit nachtragen</summary><div class="list">${past.map(rowT).join("")}</div></details>` : ""}
+   ${isCoach() ? `<button class="card pad cockpitlink" data-cockpit><b>Super-Admin-Cockpit</b><span class="small muted">Alle Mannschaften, Zugänge und Einladungen auf einen Blick</span></button>` : ""}
    ${isAdmin() ? planBox(td) : `<p class="small muted card pad">Die Trainingsplanung machen die Admins der Mannschaft. Du kannst alle Trainings ansehen, als PDF speichern und die Anwesenheit erfassen.</p>`}`;
   V.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go({ tab: "trainings", training: b.dataset.open }));
   V.querySelectorAll("[data-tab-go],[data-u]").forEach(b => b.onclick = () => go({ tab: "turniere" }));
@@ -193,6 +194,7 @@ function viewDashboard() {
   const mb = V.querySelector("[data-more]"); if (mb) mb.onclick = () => { showAll = !showAll; render(true); };
   V.querySelector("[data-planpdf]").onclick = e => makePdf(e.currentTarget, () => pdf.planPdf());
   if (isAdmin()) bindPlanBox();
+  V.querySelectorAll("[data-cockpit]").forEach(b => b.onclick = () => go({ tab: "cockpit" }));
 }
 /* ================= Trainingsplanung in der App ================= */
 let pastOpen = false;
@@ -743,19 +745,19 @@ function edHint() {
 /* ================= Kader ================= */
 let shareFor = null;
 const APP_URL = location.origin + location.pathname;
-function inviteText(p) {
+function inviteText(p, teamName = state.team.name) {
   const name = (p.display_name || "").split(" ")[0];
-  return `Hallo${name ? " " + name : ""}! Du hast jetzt Zugriff auf die Trainer-App der ${state.team.name} (FC Seuzach).\n\n` +
+  return `Hallo${name ? " " + name : ""}! Du hast jetzt Zugriff auf die Trainer-App der ${teamName} (FC Seuzach).\n\n` +
     `1. Öffne ${APP_URL}\n2. Tippe auf «Erstes Mal hier?»\n3. Gib deine E-Mail ${p.email} ein, wähle ein eigenes Passwort und tippe auf «Konto erstellen»\n\n` +
     `Tipp: Danach im Browser-Menü «Zum Startbildschirm hinzufügen», dann hast du die App wie eine normale App auf dem Handy.`;
 }
-function shareBox(p) {
-  const t = inviteText(p), enc = encodeURIComponent(t);
+function shareBox(p, teamName) {
+  const t = inviteText(p, teamName), enc = encodeURIComponent(t);
   return `<div class="sharebox"><p class="small lbl">Einladung für ${esc(p.display_name || p.email)}</p>
     <textarea readonly rows="7" id="invtext">${esc(t)}</textarea>
     <div class="btnrow" style="margin-top:6px">
       <a class="btn" href="https://wa.me/?text=${enc}" target="_blank" rel="noopener">Per WhatsApp</a>
-      <a class="btn ghost" href="mailto:${esc(p.email)}?subject=${encodeURIComponent("Zugang Trainer-App " + state.team.name)}&body=${enc}">Per E-Mail</a>
+      <a class="btn ghost" href="mailto:${esc(p.email)}?subject=${encodeURIComponent("Zugang Trainer-App " + (teamName || state.team.name))}&body=${enc}">Per E-Mail</a>
       <button class="btn ghost" data-copy>Text kopieren</button></div></div>`;
 }
 let editP = null, openP = null, kaderMode = "kader", statRange = "season";
@@ -885,7 +887,7 @@ function viewKader() {
    <p class="small muted">Tipp zum Datenschutz: Vorname und Initial reichen, zum Beispiel «Luca M.».</p>
    ${inactive.length ? `<details class="card pad"><summary class="lbl">Ausgetragene Kinder (${inactive.length})</summary><div class="list">${inactive.map(p => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(p.name)}</b></span><button class="linkbtn" data-on="${p.id}">Wieder aufnehmen</button></div>`).join("")}</div></details>` : ""}
    ${isAdmin() ? importBox() + ndsBox() : ""}
-   ${isCoach() ? `<details class="card pad" id="clubov"><summary class="lbl">Vereinsübersicht: wer hat wo Zugang?</summary><div id="clubovb" class="stack" style="margin-top:10px"><p class="small muted">Lade …</p></div></details>` : ""}
+   ${isCoach() ? `<button class="card pad cockpitlink" data-cockpit><b>Super-Admin-Cockpit</b><span class="small muted">Alle Mannschaften, Zugänge und Einladungen auf einen Blick</span></button>` : ""}
    <div class="sec-head"><h2>Trainerteam</h2><span class="note">${state.people.length} Personen</span></div>
    <div class="card list">${state.people.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${ROLE_NAME[p.role] || "Trainer/in"}</span>
@@ -916,13 +918,7 @@ function viewKader() {
       <form class="inline" id="mypw" style="margin-top:10px"><input id="mypw1" type="password" minlength="8" required placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" aria-label="Neues Passwort"><button class="btn">Speichern</button></form></details>
       <button class="btn ghost" data-out>Abmelden (${esc(state.user.email)})</button>` : `<button class="btn ghost" data-reset>Demo-Daten zurücksetzen</button>`}`;
   V.querySelectorAll("[data-km]").forEach(b => b.onclick = () => { kaderMode = b.dataset.km; render(); });
-  const ov = V.querySelector("#clubov");
-  if (ov) ov.ontoggle = async () => { if (!ov.open || ov.dataset.done) return; ov.dataset.done = 1; const box = V.querySelector("#clubovb");
-    try { const rows = await db.clubOverview(), by = {};
-      rows.forEach(r => (by[r.team_name] ||= []).push(r));
-      box.innerHTML = Object.keys(by).length ? Object.entries(by).map(([t, l]) => `<div><span class="lbl">${esc(t)} · ${l.length}</span><div class="list">${l.map(r => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto"><span class="mid"><b>${esc(r.display_name || r.email)}</b><span>${esc(r.email)} · ${ROLE_NAME[r.role] || "Trainer/in"}</span></span><span class="pill ${r.pending ? "wait" : "ok"}">${r.pending ? "eingeladen" : "aktiv"}</span></div>`).join("")}</div></div>`).join("")
-        + `<p class="small muted">Einladen oder entfernen: oben die Mannschaft wählen, dann hier unter «Trainerteam».</p>` : `<p class="small muted">Noch niemand eingetragen.</p>`;
-    } catch (e) { box.innerHTML = `<p class="small muted">Übersicht konnte nicht geladen werden.</p>`; } };
+  V.querySelectorAll("[data-cockpit]").forEach(b => b.onclick = () => go({ tab: "cockpit" }));
   V.querySelector("#addp").onsubmit = e => { e.preventDefault(); const n = V.querySelector("#pn").value.trim(); if (n) act(() => db.addPlayer(n, +V.querySelector("#py").value || null, V.querySelector("#pnds").value), n + " hinzugefügt"); };
   V.querySelectorAll("[data-open-p]").forEach(b => b.onclick = () => { const id = b.dataset.openP; openP = openP === id ? null : id; if (openP !== id) editP = null; render(true); });
   V.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editP = editP === b.dataset.edit ? null : b.dataset.edit; render(true); });
@@ -1229,6 +1225,59 @@ function viewHilfe() {
     box.querySelectorAll("[data-fbd]").forEach(b => b.onclick = () => act(async () => { await db.setFeedbackDone(b.dataset.fbd, b.dataset.v === "1"); fbList = null; }, b.dataset.v === "1" ? "Als erledigt markiert" : "Wieder offen"));
   };
   if (fbList) show(fbList); else db.listFeedback().then(l => { fbList = l; show(l); }).catch(() => { box.innerHTML = `<p class="empty">Vorschläge konnten nicht geladen werden.</p>`; });
+}
+
+/* ================= Super-Admin-Cockpit (J+S-Coach) ================= */
+let ck = null, ckOpen = null, ckShare = null, ckRm = null;
+async function loadCockpit() { const [stats, people] = await Promise.all([db.clubStats(), db.clubOverview()]); ck = { stats, people }; }
+function viewCockpit() {
+  if (!isCoach() && state.mode !== "demo") { go({ tab: "trainings" }); return; }
+  if (!ck) { V.innerHTML = `<p class="empty">Lade Cockpit …</p>`; loadCockpit().then(() => render(true)).catch(e => { V.innerHTML = `<p class="empty">Cockpit konnte nicht geladen werden: ${esc(e.message || e)}</p>`; }); return; }
+  const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "numeric" }) : "–";
+  const teams = ck.stats.map(t => { const ppl = ck.people.filter(p => p.team_id === t.team_id);
+    const adm = ppl.filter(p => p.role === "admin" && !p.pending).length, tr = ppl.filter(p => p.role !== "admin" && !p.pending).length, pend = ppl.filter(p => p.pending).length;
+    const noNds = ppl.filter(p => !p.pending && !p.nds_id).length, cov = t.past30 ? Math.round(100 * t.with_att30 / t.past30) : null;
+    const warn = [!adm && "kein aktiver Admin", cov !== null && cov < 60 && "Anwesenheit lückenhaft", noNds && `${noNds} ohne NDS-Nr.`].filter(Boolean);
+    return { ...t, ppl, adm, tr, pend, cov, warn }; });
+  const tot = k => teams.reduce((s, t) => s + (t[k] || 0), 0);
+  const teamOpts = teams.map(t => `<option value="${esc(t.team_id)}">${esc(t.team_name)}</option>`).join("");
+  V.innerHTML = `
+   <div class="sec-head"><h2>Super-Admin-Cockpit</h2><span class="note">nur für dich sichtbar</span></div>
+   <div class="ckkpis">${[[teams.length, "Mannschaften"], [tot("kids"), "Kinder"], [tot("adm") + tot("tr"), "Trainer/innen aktiv"], [tot("pend"), "Einladungen offen"]].map(([n, l]) => `<div class="card pad"><b>${n}</b><span>${l}</span></div>`).join("")}</div>
+   <form class="card pad stack" id="ckinv"><h3>Person einladen</h3>
+     <div class="frow"><select name="team" aria-label="Mannschaft">${teamOpts}</select><select name="role" aria-label="Rolle"><option value="trainer">Trainer/in</option><option value="admin">Admin (plant und lädt ein)</option></select></div>
+     <input name="email" type="email" required placeholder="E-Mail" aria-label="E-Mail"><input name="name" placeholder="Name" aria-label="Name">
+     <button class="btn">Freischalten und per WhatsApp einladen</button></form>
+   ${ckShare ? `<div class="card pad">${shareBox(ckShare, ckShare.team_name)}</div>` : ""}
+   ${teams.map(t => `<section class="card ckteam ${t.warn.length ? "warn" : ""}">
+     <button class="ckhead" data-ckt="${esc(t.team_id)}" aria-expanded="${ckOpen === t.team_id}">
+       <span class="mid"><b>${esc(t.team_name)}</b><span>${t.kids} Kinder · ${t.adm} Admin · ${t.tr} Trainer/innen${t.pend ? ` · ${t.pend} eingeladen` : ""}</span></span>
+       <span class="pill ${t.warn.length ? "bad" : "ok"}">${t.warn.length ? t.warn.length + " Hinweis" + (t.warn.length > 1 ? "e" : "") : "alles gut"}</span></button>
+     <div class="ckgrid"><div><span>Nächstes Training</span><b>${fmt(t.next_training)}</b></div><div><span>Letzte Anwesenheit</span><b>${fmt(t.last_attendance)}</b></div>
+       <div><span>Anwesenheit 30 Tage</span><b>${t.cov === null ? "–" : t.cov + " %"}</b></div><div><span>Turniere offen</span><b>${t.tournaments_open}</b></div></div>
+     ${t.warn.length ? `<p class="small ckwarn">${t.warn.map(esc).join(" · ")}</p>` : ""}
+     ${ckOpen === t.team_id ? `<div class="list">${t.ppl.length ? t.ppl.map((p, i) => `<div class="row static" style="grid-template-columns:minmax(0,1fr) auto">
+         <span class="mid"><b>${esc(p.display_name || p.email)}</b><span>${esc(p.email)} · ${ROLE_NAME[p.role] || "Trainer/in"}${!p.pending ? ` · NDS ${p.nds_id ? "✓" : "fehlt"}` : ""}</span></span>
+         <span class="stackr"><span class="pill ${p.pending ? "wait" : "ok"}">${p.pending ? "eingeladen" : "aktiv"}</span>
+           ${p.pending ? `<button class="linkbtn" data-ckwa="${esc(t.team_id)}|${i}">Per WhatsApp</button>` : ""}
+           <button class="linkbtn" data-ckrm="${esc(t.team_id)}|${i}">${ckRm === t.team_id + "|" + i ? "Wirklich entfernen?" : "Entfernen"}</button></span></div>`).join("")
+         : `<p class="empty">Noch niemand eingetragen.</p>`}
+       <div class="btnrow" style="padding:10px 14px"><button class="btn ghost" data-ckgo="${esc(t.team_id)}">Zur Mannschaft wechseln</button></div></div>` : ""}
+   </section>`).join("")}
+   <button class="btn ghost" data-ckreload>Aktualisieren</button>`;
+  const find = v => { const [tid, i] = v.split("|"); const t = teams.find(x => x.team_id === tid); return { t, p: t.ppl[+i] }; };
+  V.querySelectorAll("[data-ckt]").forEach(b => b.onclick = () => { ckOpen = ckOpen === b.dataset.ckt ? null : b.dataset.ckt; ckRm = null; render(true); });
+  V.querySelectorAll("[data-ckwa]").forEach(b => b.onclick = () => { const { t, p } = find(b.dataset.ckwa); ckShare = { ...p, team_name: t.team_name }; render(); window.scrollTo({ top: 0 }); });
+  V.querySelectorAll("[data-ckrm]").forEach(b => b.onclick = () => {
+    if (ckRm !== b.dataset.ckrm) { ckRm = b.dataset.ckrm; render(true); return; }
+    const { t, p } = find(b.dataset.ckrm); ckRm = null;
+    act(async () => { await db.removeFromTeam(t.team_id, p); await loadCockpit(); if (t.team_id === state.team.id) await db.switchTeam(t.team_id); }, `${p.display_name || p.email} entfernt`); });
+  V.querySelectorAll("[data-ckgo]").forEach(b => b.onclick = () => { route = { tab: "trainings" }; history.replaceState(route, ""); db.switchTeam(b.dataset.ckgo); });
+  V.querySelector("[data-ckreload]").onclick = () => { ck = null; ckShare = null; render(); };
+  const f = V.querySelector("#ckinv");
+  f.onsubmit = e => { e.preventDefault(); const t = teams.find(x => x.team_id === f.team.value), email = f.email.value.trim().toLowerCase(), name = f.name.value.trim(), role = f.role.value;
+    act(async () => { await db.inviteToTeam(t.team_id, email, name, role); ckShare = { email, display_name: name, role, team_name: t.team_name }; await loadCockpit().catch(() => {}); }, "Freigeschaltet – jetzt per WhatsApp senden"); };
+  V.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const ta = V.querySelector("#invtext"); navigator.clipboard?.writeText(ta.value).then(() => toast("Text kopiert"), () => { ta.select(); toast("Text markiert – jetzt kopieren"); }); });
 }
 
 function viewWissen() {
