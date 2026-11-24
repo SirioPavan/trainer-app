@@ -39,9 +39,9 @@ Nummerierung: 1 Erste Schritte, 2 Übung erfassen, 3 Team importieren, 4 Anwesen
 6 Trainer einladen, 7 NDS-Export. Eigene Stimmen: ungerade = Projektverantwortlicher, gerade = Stellvertretung.
 Aufnahmen kommen als Datei (Sprachmemos), werden mit Filter bereinigt (Rauschen, Klicks, Schmatzer) und Szene für Szene geschnitten.
 
-## Stand (24.11.2026, Cache v79)
+## Stand (24.11.2026, Cache v80)
 - Fertig: J+S-Coach mit Cockpit, Mannschaft anlegen, Hilfe mit 7 Videos, Feedback mit Push und Archiv, PDF-Fix iPhone.
-- Videos mit eigener Stimme: 1, 2, 3, 5, 7. **Offen:** 4 und 6 (noch Computerstimme), 2 wird neu aufgenommen (Auto-Aufnahme).
+- Videos mit eigener Stimme: 1, 2, 3 (Röbby), 5, 7. **Offen:** 4 und 6 (noch Computerstimme), 2 wird neu aufgenommen (Auto-Aufnahme).
 
 ## Offen / nächste Schritte
 - Videos 4 und 6 sowie neue Aufnahme von Video 2 einbauen

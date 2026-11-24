@@ -1216,15 +1216,15 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
-const VID_V = "79";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
+const VID_V = "80";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "36 Sek.", false]],
   "Planung und Training": [["training-pdf", "Training als PDF", "27 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "37 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "45 Sek.", true]],
-  "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]],
-  "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]]
+  "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "32 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]],
+  "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "32 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]]
 };
 const helpVideos = h => (HELP_VIDEOS[h] || []).filter(v => !v[3] || isAdmin()).map(([f, t, d]) =>
   `<details class="hvid"><summary><span class="hvplay" aria-hidden="true">▶</span><span><b>Video: ${t}</b><span class="small muted"> · ${d}</span></span></summary>
