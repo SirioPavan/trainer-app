@@ -1,7 +1,7 @@
 // Pilotvideo «Übung erfassen», langsam: Standbilder mit Dauer, Szenen und Klick-Zeitpunkten.
 const { chromium } = require('playwright');
 const fs = require('fs');
-const OUT = 'tools/videos/frames2'; fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+const OUT = '/home/claude/video/frames2'; fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const list = []; let n = 0, scene = 0;
 (async () => {
   const b = await chromium.launch();
@@ -14,7 +14,7 @@ const list = []; let n = 0, scene = 0;
     #vcap{position:fixed;left:14px;right:14px;bottom:104px;z-index:9999;background:#141414;color:#fff;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.35);border-left:6px solid #D2161E;font-family:'Source Sans 3',sans-serif}
     #vcap b{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:#FF6B70;line-height:1;min-width:26px}
     #vcap span{font-size:18px;line-height:1.3;font-weight:600}
-    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #D2161E;background:rgba(210,22,30,.18);pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
+    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #FFD21F;background:rgba(255,210,31,.22);box-shadow:0 0 0 2px #141414,inset 0 0 0 2px #141414;pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
   await p.evaluate(() => { const c = document.createElement('div'); c.id = 'vcap'; c.style.display = 'none'; document.body.append(c); const t = document.createElement('div'); t.id = 'vtap'; document.body.append(t); });
 
   const snap = async (sec, click = false) => { const f = `${OUT}/${String(n++).padStart(4, '0')}.jpg`; await p.screenshot({ path: f, type: 'jpeg', quality: 92 }); list.push({ f, d: sec, scene, click }); };
@@ -56,7 +56,7 @@ const list = []; let n = 0, scene = 0;
   await cap(8, '«Übung speichern» – fertig!'); await scrollTo('#edf button.btn:not(.ghost)', 380); await snap(1.0);
   await tap('#edf button.btn:not(.ghost)', 0.6); await p.waitForTimeout(500); await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
   await cap(8, 'Die Übung steht jetzt allen Trainer/innen deiner Mannschaft zur Verfügung'); await snap(3.0);
-  fs.writeFileSync('tools/videos/list2.json', JSON.stringify(list));
+  fs.writeFileSync('/home/claude/video/list2.json', JSON.stringify(list));
   console.log('frames', list.length, 'sek', list.reduce((s, x) => s + x.d, 0).toFixed(1), 'errs', errs);
   await b.close();
 })();

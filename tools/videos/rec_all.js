@@ -3,12 +3,12 @@
 const { chromium } = require('playwright');
 const fs = require('fs'), { execSync } = require('child_process');
 const NAME = process.argv[2];
-const OUT = `tools/videos/f_${NAME}`; fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+const OUT = `/home/claude/video/f_${NAME}`; fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const list = []; let n = 0, scene = 0;
 
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true });
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, acceptDownloads: true, locale: 'de-CH' });
   const p = await ctx.newPage();
   if (NAME === 'pdf') await p.addInitScript(() => { navigator.canShare = () => true; navigator.share = async () => {}; });   // Teilen-Knopf wie auf dem Handy zeigen
   const errs = []; p.on('pageerror', e => errs.push(e.message));
@@ -22,7 +22,7 @@ const list = []; let n = 0, scene = 0;
     #vcap{pointer-events:none;position:fixed;left:14px;right:14px;bottom:104px;z-index:9999;background:#141414;color:#fff;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.35);border-left:6px solid #D2161E;font-family:'Source Sans 3',sans-serif}
     #vcap b{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:#FF6B70;line-height:1;min-width:26px}
     #vcap span{font-size:18px;line-height:1.3;font-weight:600}
-    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #D2161E;background:rgba(210,22,30,.18);pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
+    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #FFD21F;background:rgba(255,210,31,.22);box-shadow:0 0 0 2px #141414,inset 0 0 0 2px #141414;pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
   await p.evaluate(() => { const c = document.createElement('div'); c.id = 'vcap'; c.style.display = 'none'; document.body.append(c); const t = document.createElement('div'); t.id = 'vtap'; document.body.append(t); });
 
   const snap = async (sec, click = false) => { const f = `${OUT}/${String(n++).padStart(4, '0')}.jpg`; await p.screenshot({ path: f, type: 'jpeg', quality: 92 }); list.push({ f, d: sec, scene, click }); };
@@ -55,19 +55,20 @@ const list = []; let n = 0, scene = 0;
       scene = 5; await q.screenshot({ path: `${OUT}/zz_inst.jpg`, type: 'jpeg', quality: 92 }); still(`${OUT}/zz_inst.jpg`, 4.0); await q.close();
     },
     import: async () => {
-      fs.writeFileSync('tools/videos/clubcorner_demo.csv', 'Name;Vorname;Geburtsdatum;Passnummer\nAebi;Aaron;12.03.2016;9900001\nAmmann;Alina;04.07.2016;9900002\nArnold;Amir;21.01.2017;9900003\n');
+      fs.writeFileSync('/home/claude/video/clubcorner_demo.csv', 'Name;Vorname;Geburtsdatum;Passnummer\nAebi;Aaron;12.03.2016;9900001\nAmmann;Alina;04.07.2016;9900002\nArnold;Amir;21.01.2017;9900003\n');
       await cap(1, 'Unten auf «Kader» tippen'); await snap(1.0); await tap('[data-tab=kader]', 1.6);
       await cap(2, '«Clubcorner-Spielerliste importieren» öffnen'); await scrollTo('.addbox summary', 300); await snap(1.0);
       { const s = await p.$$('summary'); for (const x of s) { if ((await x.textContent()).includes('Clubcorner')) { await x.evaluate(e => e.id = 'ccsum'); break; } } }
       await tap('#ccsum', 1.6);
       await cap(3, 'CSV-Datei aus Clubcorner auswählen'); await snap(1.0); await tap('#ccfile', 0.4, false);
-      await p.setInputFiles('#ccfile', 'tools/videos/clubcorner_demo.csv'); await p.waitForTimeout(1200); await snap(1.0);
+      await p.setInputFiles('#ccfile', '/home/claude/video/clubcorner_demo.csv'); await p.waitForTimeout(1200); await snap(1.0);
       await cap(4, 'Fertig: neue Kinder sind im Kader'); await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300); await snap(1.0);
       await scrollTo('[data-open-p]', 230); await snap(3.0);
     },
     anwesenheit: async () => {
       await cap(1, 'Auf der Startseite «Training öffnen»'); await snap(1.2); await tap('.go', 1.6);
-      await cap(2, 'Nach unten zur Anwesenheit'); await scrollTo('[data-attd]', 150); await snap(2.2);
+      await cap(2, 'Nach unten zur Anwesenheit, «Liste» antippen'); await p.evaluate(() => { const d = document.querySelector('[data-attd]'); d.open = false; d.querySelector('summary').textContent = 'Liste'; });
+      await scrollTo('[data-attd]', 250); await snap(1.4); await tap('[data-attd] > summary', 0.4); await scrollTo('[data-attd]', 150); await snap(1.4);
       await cap(3, 'Anwesende Kinder antippen'); await snap(0.8);
       const kids = await p.$$('[data-att]'); for (let i = 0; i < Math.min(7, kids.length); i++) { const sel = `[data-att]:nth-of-type(${i + 1})`;
         const id = await kids[i].getAttribute('data-att'); await tap(`[data-att="${id}"]`, 0.35); }
@@ -100,6 +101,21 @@ const list = []; let n = 0, scene = 0;
       await snap(2.0);
       await cap(5, '«Per WhatsApp» – Nachricht ist fertig vorbereitet'); await tap('.sharebox a[href^="https://wa.me"]', 2.5, false); await snap(1.0);
     },
+    turniere: async () => {
+      await cap(1, 'Unten auf «Turniere» tippen'); await snap(1.0); await tap('[data-tab=turniere]', 2.4);
+      await cap(2, 'Neues Turnier unten anlegen – oder aus Excel einlesen'); await scrollTo('#addu', 420); await snap(0.8);
+      await type('#un', 'Hallencup Seuzach', 3); await p.evaluate(() => { const d = document.querySelector('#ud'); d.type = 'text'; d.value = '16.01.2027'; }); await snap(0.5); await type('#ut', '09:00–12:00', 3); await type('#uo', 'Turnhalle', 3); await snap(1.0);
+      { const sm = await p.$$('details.card > summary.lbl'); for (const x of sm) if ((await x.textContent()).includes('einlesen')) await x.evaluate(e => e.id = 'impsum'); }
+      await tap('#impsum', 2.0);
+      await cap(3, '«Trainer & Anwesenheit» antippen'); await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300); await snap(0.6);
+      await tap('[data-topen]', 1.0); await scrollTo('.tatt', 130); await snap(1.4);
+      { const kids = await p.$$('.tatt [data-att]'); for (const k of kids.slice(0, 4)) { const id = await k.getAttribute('data-att'); await tap(`.tatt [data-att="${id}"]`, 0.35); } } await snap(1.0);
+      await cap(4, 'Nächstes Turnier auf der Startseite – Turnierregeln unter «Wissen»'); await tap('[data-tab=trainings]', 0.3); await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300); await snap(2.0);
+      await tap('[data-tab=wissen]', 0.6); await scrollTo('details.rules', 200); await snap(0.6); await tap('details.rules > summary', 0.6); await scrollTo('details.rules', 140); await snap(2.0);
+      await cap(5, 'Vergangene Turniere nachtragen – NDS: als «Wettkampf»'); await tap('[data-tab=turniere]', 1.0);
+      { const sm = await p.$$('details.card > summary.lbl'); for (const x of sm) if ((await x.textContent()).includes('Vergangene')) await x.evaluate(e => e.id = 'pastsum'); }
+      if (await p.$('#pastsum')) { await tap('#pastsum', 0.6); await scrollTo('#pastsum', 160); await snap(2.6); } else await snap(2.6);
+    },
     nds: async () => {
       await cap(1, 'Unten auf «Kader» tippen'); await snap(1.0); await tap('[data-tab=kader]', 1.4);
       await cap(2, 'Nach unten zum «NDS-Export»'); await scrollTo('#ndsx', 230); await snap(2.2);
@@ -111,7 +127,7 @@ const list = []; let n = 0, scene = 0;
     }
   };
   await S[NAME]();
-  fs.writeFileSync(`tools/videos/list_${NAME}.json`, JSON.stringify(list));
+  fs.writeFileSync(`/home/claude/video/list_${NAME}.json`, JSON.stringify(list));
   console.log(NAME, 'frames', list.length, 'sek', list.reduce((s, x) => s + x.d, 0).toFixed(1), 'scenes', [...new Set(list.map(x => x.scene))].join(','), 'errs', errs);
   await b.close();
 })();

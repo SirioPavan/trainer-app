@@ -44,6 +44,13 @@ V = {
    "Trage E-Mail und Namen ein, und wähle die Rolle.",
    "Tippe auf: Einladen.",
    "Mit: Per WhatsApp, schickst du die fertige Einladung. Die Person tippt dann in der App auf: Erstes Mal hier, und erstellt ihr Konto."]),
+ "turniere": ("Turniere", "Anlegen, Trainer einteilen, Anwesenheit – und ab in die NDS.", [
+   "Hoi zäme. I däm Video zeig ich eu, wie ihr i de App Turnier verwalted.",
+   "Under Turnier gsehnd ihr alli chömede Turnier mit Datum, Ort und Status.",
+   "Es neus Turnier leged ihr une aa, oder ihr läsed sie us em Excel ii.",
+   "Tippet es Turnier aa: Trainer und Aawäseheit.",
+   "S nächste Turnier chunnt au uf de Startsiite, une d Turnierregle.",
+   "Vergangeni Turnier chönd ihr nachträglich ergänze, bim NDS-Export als Wettkampf."]),
  "nds": ("NDS-Export", "Aktivitäten und Anwesenheiten für J+S – in der richtigen Reihenfolge.", [
    "Hallo zusammen! So exportierst du die Anwesenheiten für die NDS.",
    "Tippe unten auf Kader.",
@@ -55,10 +62,10 @@ V = {
 }
 OUTRO = "Weitere Hilfe findest du oben rechts, beim Fragezeichen."
 name = sys.argv[1]; title, sub, texts = V[name]
-D = "tools/videos"; TTS = "tools/tts"; SR = 16000
+D = "/home/claude/video"; TTS = "/home/claude/tts"; SR = 16000
 
 # Titelkarten
-logo = "data:image/png;base64," + base64.b64encode(open('./logo-white.png', 'rb').read()).decode()
+logo = "data:image/png;base64," + base64.b64encode(open('/home/claude/trainer-app/logo-white.png', 'rb').read()).decode()
 def card(t, s, ey):
     return f"""<!doctype html><html><head><meta charset=utf-8><style>
 body{{margin:0;width:390px;height:844px;background:#141414;color:#fff;font-family:'Source Sans 3';display:flex;flex-direction:column;justify-content:center;padding:0 30px;box-sizing:border-box;position:relative;overflow:hidden}}
@@ -90,6 +97,9 @@ if own:
         st = next((i for i in range(len(on) - run_) if on[i:i + run_].all()), 0)
         lo_ = rms > 10 ** (-46 / 20); tail = np.where(lo_[:-1] & lo_[1:])[0] + 1   # Ende: leise Wortenden bleiben, einzelne Klicks nicht
         en = int(tail[-1]) if len(tail) else len(on) - 1
+        soft = rms > 10 ** (-56 / 20)   # leise Anlaute (S, F, Sch) und Wortenden mitnehmen, solange es nicht still wird
+        while st > 0 and soft[st - 1]: st -= 1
+        while en < len(soft) - 1 and soft[en + 1]: en += 1
         seg = seg[max(0, st * win - int(.12 * SR)):min(len(seg), (en + 1) * win + int(.25 * SR))]
         f = int(.08 * SR); seg[:f] *= np.linspace(0, 1, f); seg[-f:] *= np.linspace(1, 0, f); vo.append(seg)
     vo.append(np.zeros(1, dtype=np.float32))   # Schlusskarte ohne Stimme
