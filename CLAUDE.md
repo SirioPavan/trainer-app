@@ -41,13 +41,13 @@ Nummerierung: 1 Erste Schritte, 2 Übung erfassen, 3 Team importieren, 4 Anwesen
 6 Trainer einladen, 7 NDS-Export, 8 Turniere (Mundart). Eigene Stimmen: ungerade = Projektverantwortlicher, gerade = Stellvertretung.
 Aufnahmen kommen als Datei (Sprachmemos), werden mit Filter bereinigt (Rauschen, Klicks, Schmatzer) und Szene für Szene geschnitten.
 
-## Stand (24.11.2026, Cache v83)
+## Stand (24.11.2026, Cache v84)
 - Fertig: J+S-Coach mit Cockpit, Mannschaft anlegen, Hilfe mit 7 Videos, Feedback mit Push und Archiv, PDF-Fix iPhone.
 - Alle 8 Videos mit eigener Stimme (Sirio: 1, 5, 7, 8 · Röbby: 2, 3, 4, 6). Tipp-Kreis weiss mit schwarzem Rand (rot ging auf roten Knöpfen unter, gelb abgelehnt).
+- Lernvideo «J+S Kinderfussball – das Wichtigste» unter «Wissen» (Computerstimme Thorsten, stufenneutral; `tools/videos/lern.py`), später evtl. Röbbys Stimme.
 - Automatische Wochensicherung läuft (erster Lauf 24.11.2026 erfolgreich, ca. 470 KB).
 
 ## Offen / nächste Schritte
-- Lernvideo «Die wichtigsten J+S-Inhalte» (Inhalt und Stimme noch zu klären)
 - Video 8: Satz «une i de Lischte» → Turnierregeln sind unter «Wissen» (bei Bedarf neu sprechen)
 - Anmeldung J+S-Coach in der Datenbank prüfen, sobald erfolgt
 - Supabase: Authentication → «Confirm email» muss aus sein (Entscheid: Anmeldung ohne Bestätigungs-Mail)

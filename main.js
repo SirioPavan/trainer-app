@@ -1216,11 +1216,12 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
-const VID_V = "83";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
+const VID_V = "84";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "36 Sek.", false]],
   "Planung und Training": [["training-pdf", "Training als PDF", "27 Sek.", false]],
+  "Wissen": [["js-kinderfussball", "J+S Kinderfussball – das Wichtigste", "2:25 Min.", false]],
   "Turniere": [["turniere", "Turniere verwalten", "66 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "36 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "50 Sek.", true]],
@@ -1384,6 +1385,7 @@ function viewWissen() {
   const R = "var(--red)", K = "#141414", G = "#7a7a7a", L = "#5a5a5a";
   V.innerHTML = `
    <div class="sec-head"><h2>Wissen</h2><span class="note">Kurs & Dokumente</span></div>
+   <div class="card pad">${helpVideos("Wissen")}</div>
    ${docsSection()}
    ${rulesSection()}
    <section class="card pad stack"><h3>Trainingsaufbau <span class="muted small">S. 37</span></h3>
@@ -1410,6 +1412,8 @@ function viewWissen() {
    <section class="card pad"><h3>Motivationskreislauf <span class="muted small">S. 34</span></h3>${WHEEL_MOT}<p class="small muted">Das erste «L», das Lachen, bringt den Kreislauf zum Laufen.</p></section>
    <section class="card pad"><h3>Merkpunkte <span class="muted small">S. 52</span></h3>${merkpunkte()}</section>`;
   bindDocs();
+  V.querySelectorAll(".hvid").forEach(d => d.ontoggle = () => { const v = d.querySelector("video");
+    if (d.open && !v.src) { v.src = v.dataset.src; v.preload = "metadata"; } if (!d.open) v.pause(); });
 }
 
 
