@@ -15,6 +15,8 @@ NDS-Export, Übungen mit Skizzen. Mehrere Mannschaften, strikt getrennt. Kostenl
 - Rechte: `private.is_member(team)`, `private.is_admin(team)` (admin **oder** coach), `private.is_coach(team)`,
   `private.is_app_owner()` (Liste `private.app_owners`).
 - Push bei Feedback: Edge Function `notify-feedback` + Trigger auf `feedback` (pg_net), Schlüssel in `private.push_config`.
+- Wochensicherung: pg_cron `trainer-app-wochensicherung` (So 03:17 UTC) → `private.run_backup()` → Edge Function
+  `weekly-backup` → JSON aller Tabellen in Storage-Bucket `backups` (privat, die 12 neusten bleiben).
 - Dateien: `main.js` (Oberfläche), `store.js` (Daten/Demo), `pdf.js` (PDF), `plan.js`, `gen.js`, `diagram.js`, `sw.js` (Cache).
 
 ## Regeln
@@ -42,6 +44,10 @@ Aufnahmen kommen als Datei (Sprachmemos), werden mit Filter bereinigt (Rauschen,
 ## Stand (24.11.2026, Cache v81)
 - Fertig: J+S-Coach mit Cockpit, Mannschaft anlegen, Hilfe mit 7 Videos, Feedback mit Push und Archiv, PDF-Fix iPhone.
 - Alle 7 Videos mit eigener Stimme (Sirio: 1, 5, 7 · Röbby: 2, 3, 4, 6).
+- Automatische Wochensicherung läuft (erster Lauf 24.11.2026 erfolgreich, ca. 470 KB).
+
+## Offen / nächste Schritte
+- Video 8 «Turniere»: Sirio spricht es auf (Aufnahme folgt als Datei), dann aufnehmen, schneiden, einbinden
 
 ## Offen / nächste Schritte
 - Anmeldung J+S-Coach in der Datenbank prüfen, sobald erfolgt
