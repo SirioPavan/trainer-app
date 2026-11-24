@@ -1216,6 +1216,7 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
+const VID_V = "77";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "36 Sek.", false]],
@@ -1227,7 +1228,7 @@ const HELP_VIDEOS = {
 };
 const helpVideos = h => (HELP_VIDEOS[h] || []).filter(v => !v[3] || isAdmin()).map(([f, t, d]) =>
   `<details class="hvid"><summary><span class="hvplay" aria-hidden="true">▶</span><span><b>Video: ${t}</b><span class="small muted"> · ${d}</span></span></summary>
-   <video controls playsinline preload="none" poster="videos/${f}.jpg" data-src="videos/${f}.mp4"></video></details>`).join("");
+   <video controls playsinline preload="none" poster="videos/${f}.jpg?v=${VID_V}" data-src="videos/${f}.mp4?v=${VID_V}"></video></details>`).join("");
 let fbList = null, fbDel = null;
 function viewHilfe() {
   const items = l => l.filter(t => !t.startsWith("admin:") || isAdmin()).map(t => `<li>${t.replace(/^admin:/, "")}</li>`).join("");
