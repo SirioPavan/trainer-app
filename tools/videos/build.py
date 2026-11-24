@@ -136,8 +136,9 @@ for k, sc in enumerate(scenes):
 A = np.clip(np.concatenate(audio), -1, 1)
 if own:   # einzelne Klicks in leisen Stellen (Handy, Mund) ausblenden: kurzer Ausschlag, der weit über seiner Umgebung liegt
     win = int(.005 * SR); r = 20 * np.log10(np.array([np.sqrt(np.mean(A[i:i + win] ** 2)) for i in range(0, len(A) - win, win)]) + 1e-9)
-    for i in range(4, len(r) - 4):
-        if r[i] > -50 and r[i] - max(r[i - 4], r[i + 4]) > 12:
+    for i in range(12, len(r) - 12):   # nur in Stille: rundherum (±20–60 ms) leiser als -45 dB, sonst ist es Sprache (z. B. «t» in «Liste»)
+        nb = max(r[i - 12:i - 3].max(), r[i + 4:i + 13].max())
+        if r[i] > -50 and nb < -45 and r[i] - nb > 12:
             s0, s1 = max(0, (i - 2) * win), min(len(A), (i + 3) * win)
             A[s0:s1] *= np.concatenate([np.linspace(1, 0, 48), np.zeros(s1 - s0 - 96), np.linspace(0, 1, 48)]) if s1 - s0 > 96 else 0
 with wave.open(f"{D}/a_{name}.wav", "wb") as w:
