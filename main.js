@@ -1216,7 +1216,7 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
-const VID_V = "82";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
+const VID_V = "83";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "36 Sek.", false]],

@@ -14,7 +14,7 @@ const list = []; let n = 0, scene = 0;
     #vcap{position:fixed;left:14px;right:14px;bottom:104px;z-index:9999;background:#141414;color:#fff;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.35);border-left:6px solid #D2161E;font-family:'Source Sans 3',sans-serif}
     #vcap b{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:#FF6B70;line-height:1;min-width:26px}
     #vcap span{font-size:18px;line-height:1.3;font-weight:600}
-    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #FFD21F;background:rgba(255,210,31,.22);box-shadow:0 0 0 2px #141414,inset 0 0 0 2px #141414;pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
+    #vtap{position:fixed;z-index:9998;border-radius:50%;border:4px solid #FFFFFF;background:rgba(255,255,255,.25);box-shadow:0 0 0 2px #141414,inset 0 0 0 2px #141414;pointer-events:none;display:none;transform:translate(-50%,-50%)}` });
   await p.evaluate(() => { const c = document.createElement('div'); c.id = 'vcap'; c.style.display = 'none'; document.body.append(c); const t = document.createElement('div'); t.id = 'vtap'; document.body.append(t); });
 
   const snap = async (sec, click = false) => { const f = `${OUT}/${String(n++).padStart(4, '0')}.jpg`; await p.screenshot({ path: f, type: 'jpeg', quality: 92 }); list.push({ f, d: sec, scene, click }); };

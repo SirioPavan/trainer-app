@@ -41,9 +41,9 @@ Nummerierung: 1 Erste Schritte, 2 Übung erfassen, 3 Team importieren, 4 Anwesen
 6 Trainer einladen, 7 NDS-Export, 8 Turniere (Mundart). Eigene Stimmen: ungerade = Projektverantwortlicher, gerade = Stellvertretung.
 Aufnahmen kommen als Datei (Sprachmemos), werden mit Filter bereinigt (Rauschen, Klicks, Schmatzer) und Szene für Szene geschnitten.
 
-## Stand (24.11.2026, Cache v82)
+## Stand (24.11.2026, Cache v83)
 - Fertig: J+S-Coach mit Cockpit, Mannschaft anlegen, Hilfe mit 7 Videos, Feedback mit Push und Archiv, PDF-Fix iPhone.
-- Alle 8 Videos mit eigener Stimme (Sirio: 1, 5, 7, 8 · Röbby: 2, 3, 4, 6). Tipp-Kreis gelb (rot ging auf roten Knöpfen unter).
+- Alle 8 Videos mit eigener Stimme (Sirio: 1, 5, 7, 8 · Röbby: 2, 3, 4, 6). Tipp-Kreis weiss mit schwarzem Rand (rot ging auf roten Knöpfen unter, gelb abgelehnt).
 - Automatische Wochensicherung läuft (erster Lauf 24.11.2026 erfolgreich, ca. 470 KB).
 
 ## Offen / nächste Schritte
