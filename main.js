@@ -1216,12 +1216,12 @@ const HELP = [
     "<b>Passwort vergessen:</b> auf der Anmeldeseite «Passwort vergessen?» wählen.",
     "<b>Ausprobieren ohne Risiko:</b> Die Demo mit erfundenen Daten öffnet sich über den Link mit <code>?demo</code> am Ende."]]
 ];
-const VID_V = "77";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
+const VID_V = "78";   // bei neuen Videos erhöhen, damit Handys nicht die alte Fassung aus dem Zwischenspeicher zeigen
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "36 Sek.", false]],
   "Planung und Training": [["training-pdf", "Training als PDF", "27 Sek.", false]],
-  "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
+  "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "35 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "45 Sek.", true]],
   "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]],
   "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]]
