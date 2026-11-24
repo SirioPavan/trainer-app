@@ -47,9 +47,7 @@ Aufnahmen kommen als Datei (Sprachmemos), werden mit Filter bereinigt (Rauschen,
 - Automatische Wochensicherung läuft (erster Lauf 24.11.2026 erfolgreich, ca. 470 KB).
 
 ## Offen / nächste Schritte
-- Video 8 «Turniere»: Sirio spricht es auf (Aufnahme folgt als Datei), dann aufnehmen, schneiden, einbinden
-
-## Offen / nächste Schritte
+- Video 8 «Turniere»: Sirio spricht es auf (Aufnahme folgt als Datei), dann aufnehmen, schneiden, einbinden (Mundart)
 - Anmeldung J+S-Coach in der Datenbank prüfen, sobald erfolgt
 - Supabase: Authentication → «Confirm email» muss aus sein (Entscheid: Anmeldung ohne Bestätigungs-Mail)
 - Name für die App finden
