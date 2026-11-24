@@ -1218,7 +1218,7 @@ const HELP = [
 ];
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
-  "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "32 Sek.", false]],
+  "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "33 Sek.", false]],
   "Planung und Training": [["training-pdf", "Training als PDF", "25 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "45 Sek.", true]],
