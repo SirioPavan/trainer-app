@@ -1219,7 +1219,7 @@ const HELP = [
 // How-to-Videos pro Hilfe-Abschnitt: [Datei, Titel, Dauer, nur für Admins]
 const HELP_VIDEOS = {
   "Erste Schritte": [["erste-schritte", "Konto erstellen und App installieren", "33 Sek.", false]],
-  "Planung und Training": [["training-pdf", "Training als PDF", "25 Sek.", false]],
+  "Planung und Training": [["training-pdf", "Training als PDF", "27 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "45 Sek.", true]],
   "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "30 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "28 Sek.", true]],
