@@ -239,7 +239,7 @@ export function offer({ blob, name, pages }) {
   box.className = "pdfsheet";
   box.innerHTML = `<div class="pdfsheet-in" role="dialog" aria-label="PDF bereit">
     <b>PDF bereit</b><span class="muted small">${esc(name)} · ${pages} ${pages === 1 ? "Seite" : "Seiten"}</span>
-    <div class="btnrow">${canShare ? `<button class="btn" data-share>Teilen …</button>` : ""}
+    <div class="btnrow">${canShare ? `<button class="btn" data-share>Teilen (WhatsApp, Mail …)</button>` : ""}
       <a class="btn ${canShare ? "ghost" : ""}" href="${url}" download="${esc(name)}" data-dl>Herunterladen</a>
       <button class="btn ghost" data-close>Schliessen</button></div></div>`;
   document.body.appendChild(box);

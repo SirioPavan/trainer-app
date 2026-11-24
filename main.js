@@ -1222,8 +1222,8 @@ const HELP_VIDEOS = {
   "Planung und Training": [["training-pdf", "Training als PDF", "27 Sek.", false]],
   "Anwesenheit": [["anwesenheit", "Anwesenheit erfassen", "38 Sek.", false]],
   "Übungen": [["uebung-erfassen", "Eigene Übung erfassen", "45 Sek.", true]],
-  "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "30 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]],
-  "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "30 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]]
+  "Kader und Trainerteam": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["trainer-einladen", "Trainer/in einladen", "35 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]],
+  "Kader und NDS": [["team-importieren", "Team aus Clubcorner importieren", "33 Sek.", true], ["nds-export", "NDS-Export", "33 Sek.", true]]
 };
 const helpVideos = h => (HELP_VIDEOS[h] || []).filter(v => !v[3] || isAdmin()).map(([f, t, d]) =>
   `<details class="hvid"><summary><span class="hvplay" aria-hidden="true">▶</span><span><b>Video: ${t}</b><span class="small muted"> · ${d}</span></span></summary>
